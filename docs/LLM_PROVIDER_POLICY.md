@@ -8,9 +8,11 @@ It is a project source-of-truth document for provider-related development decisi
 
 This is not an API reference and not a provider comparison report.
 
-Current status: initial policy before provider implementation.
+Current status: Stage 3 technical spike completed for provider and MCP feasibility.
 
-Provider-specific details must be validated during implementation / technical spike before they are treated as runtime facts.
+Production provider implementation is still pending. Spike files verify dependency
+resolution, request-shape helpers, credential gating, deterministic mock behavior
+and local MCP feasibility only.
 
 ---
 
@@ -119,7 +121,28 @@ Rules:
 * secrets must not be logged;
 * default tests must not call GigaChat.
 
-Implementation details are not accepted facts until verified in Stage 3 / provider spike.
+Stage 3 verified a direct `httpx` GigaChat path as the preferred production
+candidate for the next implementation stage.
+
+Manual GigaChat PERS smoke confirmed auth, token acquisition, model listing and simple chat completion.
+
+Strict `response_format=json_schema` structured output was not accepted in the current personal-account path. The provider may return JSON-like text that still requires backend parsing and strict schema validation.
+
+The MVP must not depend on provider-enforced schema compliance for GigaChat PERS. Backend validation remains mandatory.
+
+Verified spike details:
+
+* token acquisition uses the OAuth endpoint configured by `GIGACHAT_AUTH_URL`;
+* chat completions use a configurable `GIGACHAT_BASE_URL` and `/chat/completions`;
+* structured decisions use a strict JSON-schema response format based on the
+  project decision schema;
+* provider-native function calling can be represented as proposals through the
+  GigaChat `functions` / `function_call` payload shape;
+* credentials and smoke execution are gated before any real network call;
+* provider HTTP errors are mapped to safe internal categories.
+
+The OpenAI SDK was not added during the spike because the direct HTTP path is
+sufficient for request-shape validation and avoids an unnecessary dependency.
 
 ---
 
@@ -139,7 +162,10 @@ Rules:
 * YandexGPT adapter can remain stubbed or deferred if GigaChat path is enough for MVP;
 * any Yandex-specific behavior must be documented after verification.
 
-Implementation details are not accepted facts until verified.
+Stage 3 left YandexGPT as a deferred adapter stub. The provider boundary can host
+a Yandex settings object and fail early on missing or placeholder credentials,
+but no real YandexGPT adapter or smoke script is required for MVP progress unless
+the provider is explicitly promoted from stretch scope.
 
 ---
 
@@ -150,9 +176,12 @@ Planned environment variables:
 ```env id="ipf9yf"
 LLM_PROVIDER=mock
 
+GIGACHAT_AUTHORIZATION_KEY=change_me
 GIGACHAT_API_KEY=change_me
-GIGACHAT_MODEL=change_me
-GIGACHAT_BASE_URL=change_me
+GIGACHAT_MODEL=GigaChat-2-Pro
+GIGACHAT_BASE_URL=https://gigachat.devices.sberbank.ru/api/v1
+GIGACHAT_AUTH_URL=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
+GIGACHAT_SCOPE=GIGACHAT_API_PERS
 
 YANDEX_API_KEY=change_me
 YANDEX_FOLDER_ID=change_me
@@ -168,6 +197,9 @@ Rules:
 
 * `.env.example` may contain placeholders only;
 * real `.env` must not be committed;
+* `GIGACHAT_AUTHORIZATION_KEY` is the preferred name for the Basic
+  Authorization key used by the OAuth request;
+* `GIGACHAT_API_KEY` remains a temporary legacy alias for the same value;
 * placeholder values such as `change_me` must be rejected for real provider calls;
 * provider-specific secrets must not appear in logs, audit events, screenshots or public docs.
 
@@ -269,6 +301,10 @@ Fallback implementation may use a FastAPI MCP-like tool server if real MCP block
 
 Fallback must still preserve explicit tool schemas, validation and audit.
 
+Stage 3 verified that the official Python `mcp` SDK v1.x resolves and imports
+under Python 3.14, and that a minimal local stdio server with one fake tool is
+feasible. This does not implement the production ToolRegistry or approval model.
+
 ---
 
 ## 10. Real Provider Smoke Policy
@@ -291,6 +327,31 @@ Suggested flag:
 ```env id="t74wp1"
 ENABLE_REAL_PROVIDER_SMOKE=1
 ```
+
+Current manual smoke entrypoints:
+
+```text
+uv run python scripts/manual_gigachat_smoke.py
+uv run python scripts/mcp_smoke.py
+```
+
+`scripts/manual_gigachat_smoke.py` is skipped unless `ENABLE_REAL_PROVIDER_SMOKE=1`
+is set in the project-root `.env`. It loads project-root `.env` values through
+`pydantic-settings`, rejects placeholder credentials, enables `truststore` for
+local Windows/root-certificate compatibility, and prints only safe normalized
+diagnostics.
+
+Current manual smoke phases:
+
+1. credential/settings precheck;
+2. token acquisition;
+3. authenticated `GET /models`;
+4. simple chat completion without `response_format` and without functions;
+5. structured JSON response without functions;
+6. function-calling response without strict structured output.
+
+The smoke keeps structured output and function calling separate so failures can
+be diagnosed by capability.
 
 Manual smoke should verify:
 

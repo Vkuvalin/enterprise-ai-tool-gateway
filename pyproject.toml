@@ -6,13 +6,19 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi",
+    "mcp>=1,<2",
     "uvicorn",
     "pydantic",
     "pydantic-settings",
     "sqlalchemy",
     "aiosqlite",
     "httpx",
+    "truststore>=0.10.4",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
@@ -31,3 +37,5 @@ line-length = 100
 [tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"
