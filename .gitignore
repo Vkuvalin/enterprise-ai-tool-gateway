@@ -1,0 +1,35 @@
+# Private Codex
+AGENTS.md
+.agents/
+.codex/
+docs/codex/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

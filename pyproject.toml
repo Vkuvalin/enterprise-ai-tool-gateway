@@ -1,0 +1,33 @@
+[project]
+name = "enterprise-ai-tool-gateway"
+version = "0.1.0"
+description = "Controlled enterprise tool gateway for LLM-powered agents"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "pydantic-settings",
+    "sqlalchemy",
+    "aiosqlite",
+    "httpx",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "pyright",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pyright]
+pythonVersion = "3.14"
+typeCheckingMode = "basic"
