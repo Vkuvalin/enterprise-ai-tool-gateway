@@ -1,0 +1,238 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from uuid import uuid4
+
+import pytest
+from pydantic import ValidationError
+
+from enterprise_ai_tool_gateway.contracts import (
+    AgentRunCreate,
+    AgentRunRead,
+    AgentRunStatus,
+    ApprovalRead,
+    ApprovalStatus,
+    AuditEventRead,
+    AuditEventType,
+    DomainTemplate,
+    LLMDecisionPayload,
+    ProviderName,
+    ProposedToolCall,
+    RequestType,
+    RiskLevel,
+    ToolCallRead,
+    ToolCallStatus,
+    ToolType,
+)
+from enterprise_ai_tool_gateway.llm import LLMDecisionRequest, MockLLMProvider
+
+
+def test_core_enum_values_are_stable_strings() -> None:
+    assert [item.value for item in RequestType] == [
+        "ACCESS_REQUEST",
+        "PROCUREMENT_REQUEST",
+        "MAINTENANCE_REQUEST",
+        "POLICY_INQUIRY",
+        "UNKNOWN",
+    ]
+    assert [item.value for item in DomainTemplate] == [
+        "ACCESS",
+        "PROCUREMENT",
+        "MAINTENANCE_LITE",
+        "POLICY",
+        "UNKNOWN",
+    ]
+    assert [item.value for item in AgentRunStatus] == [
+        "CREATED",
+        "CLASSIFYING",
+        "DECISION_VALIDATION",
+        "NEEDS_USER_INPUT",
+        "TOOL_PLANNING",
+        "TOOL_VALIDATION",
+        "EXECUTING_READ_TOOLS",
+        "POLICY_CHECK",
+        "WAITING_FOR_APPROVAL",
+        "EXECUTING_ACTION",
+        "COMPLETED",
+        "FAILED_PROVIDER",
+        "FAILED_VALIDATION",
+        "FAILED_TOOL",
+        "REJECTED",
+        "NEEDS_MANUAL_REVIEW",
+    ]
+    assert [item.value for item in RiskLevel] == ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    assert [item.value for item in ToolType] == [
+        "READ_ONLY",
+        "STATE_CHANGING",
+        "APPROVAL",
+        "AUDIT",
+    ]
+    assert [item.value for item in ToolCallStatus] == [
+        "PROPOSED",
+        "VALIDATED",
+        "EXECUTING",
+        "SUCCEEDED",
+        "FAILED",
+        "REJECTED",
+        "WAITING_FOR_APPROVAL",
+    ]
+    assert [item.value for item in ApprovalStatus] == [
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "CANCELLED",
+    ]
+    assert [item.value for item in ProviderName] == ["MOCK", "GIGACHAT", "YANDEX"]
+    assert [item.value for item in AuditEventType] == [
+        "RUN_CREATED",
+        "PROVIDER_SELECTED",
+        "DECISION_VALIDATED",
+        "TOOL_PROPOSED",
+        "TOOL_VALIDATED",
+        "TOOL_EXECUTED",
+        "POLICY_CHECKED",
+        "APPROVAL_REQUESTED",
+        "APPROVAL_DECIDED",
+        "RUN_COMPLETED",
+        "RUN_FAILED",
+    ]
+
+
+def test_agent_run_create_forbids_extra_fields() -> None:
+    with pytest.raises(ValidationError):
+        AgentRunCreate.model_validate(
+            {
+                "user_id": "user-1",
+                "request_text": "Need access",
+                "unexpected": "value",
+            }
+        )
+
+
+def test_llm_decision_payload_validates_enums_and_nested_tools() -> None:
+    decision = LLMDecisionPayload(
+        request_type=RequestType.ACCESS_REQUEST,
+        domain_template=DomainTemplate.ACCESS,
+        confidence=0.95,
+        risk_level=RiskLevel.MEDIUM,
+        requires_approval=True,
+        proposed_tool_calls=[
+            ProposedToolCall(
+                name="create_access_request_draft",
+                arguments={"run_id": "run-1"},
+                requires_approval=True,
+            )
+        ],
+        user_facing_summary="Access request classified.",
+        reason_codes=["ACCESS_MATCH"],
+    )
+
+    assert decision.schema_version == "1.0"
+    assert decision.request_type == RequestType.ACCESS_REQUEST
+    assert decision.domain_template is DomainTemplate.ACCESS
+    assert decision.proposed_tool_calls[0].arguments == {"run_id": "run-1"}
+
+
+def test_llm_decision_payload_rejects_unknown_enum_value() -> None:
+    with pytest.raises(ValidationError):
+        LLMDecisionPayload.model_validate(
+            {
+                "request_type": "INCIDENT",
+                "domain_template": DomainTemplate.UNKNOWN,
+                "confidence": 0.2,
+                "risk_level": RiskLevel.LOW,
+                "requires_approval": False,
+                "user_facing_summary": "Unknown",
+            }
+        )
+
+
+def test_llm_decision_payload_accepts_legacy_domain_template_alias() -> None:
+    decision = LLMDecisionPayload.model_validate(
+        {
+            "request_type": RequestType.ACCESS_REQUEST,
+            "domain_template": "ACCESS_REQUEST",
+            "confidence": 0.95,
+            "risk_level": RiskLevel.MEDIUM,
+            "requires_approval": True,
+            "user_facing_summary": "Access request classified.",
+        }
+    )
+
+    assert decision.domain_template is DomainTemplate.ACCESS
+
+
+def test_read_contracts_validate_minimal_foundation_shapes() -> None:
+    now = datetime.now(UTC)
+    run_id = uuid4()
+    tool_call_id = uuid4()
+    approval_id = uuid4()
+
+    run = AgentRunRead(
+        id=run_id,
+        user_id="user-1",
+        request_text="Need access",
+        request_type=RequestType.ACCESS_REQUEST,
+        domain_template=DomainTemplate.ACCESS,
+        status=AgentRunStatus.CREATED,
+        risk_level=None,
+        requires_approval=False,
+        provider_name=ProviderName.MOCK,
+        final_summary=None,
+        error_type=None,
+        error_message=None,
+        created_at=now,
+        updated_at=now,
+    )
+    tool_call = ToolCallRead(
+        id=tool_call_id,
+        run_id=run_id,
+        tool_name="fake_policy_lookup",
+        tool_type=ToolType.READ_ONLY,
+        status=ToolCallStatus.PROPOSED,
+        input_payload={"request_type": RequestType.ACCESS_REQUEST.value},
+        output_payload=None,
+        error_message=None,
+        requires_approval=False,
+        approval_id=approval_id,
+        created_at=now,
+        updated_at=now,
+    )
+    approval = ApprovalRead(
+        id=approval_id,
+        run_id=run_id,
+        tool_call_id=tool_call_id,
+        status=ApprovalStatus.PENDING,
+        required_approver_role="manager",
+        summary="Approve access draft",
+        reason=None,
+        decided_by=None,
+        decision_comment=None,
+        created_at=now,
+        updated_at=now,
+    )
+    event = AuditEventRead(
+        id=uuid4(),
+        run_id=run_id,
+        event_type=AuditEventType.RUN_CREATED,
+        actor="system",
+        payload={"status": AgentRunStatus.CREATED.value},
+        created_at=now,
+    )
+
+    assert run.id == run_id
+    assert tool_call.approval_id == approval_id
+    assert approval.tool_call_id == tool_call_id
+    assert event.payload == {"status": "CREATED"}
+
+
+@pytest.mark.asyncio
+async def test_existing_mock_provider_uses_shared_decision_contract() -> None:
+    decision = await MockLLMProvider().generate_structured_decision(
+        LLMDecisionRequest(user_request="Нужен доступ к CRM.")
+    )
+
+    assert decision.request_type == RequestType.ACCESS_REQUEST
+    assert decision.domain_template == "ACCESS_REQUEST"
+    assert isinstance(decision.proposed_tool_calls[0], ProposedToolCall)
+    assert decision.proposed_tool_calls[0].name == "create_access_request_draft"

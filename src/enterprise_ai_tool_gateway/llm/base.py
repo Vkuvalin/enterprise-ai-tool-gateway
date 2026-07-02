@@ -10,6 +10,8 @@ from typing import Any, Mapping, Protocol, cast
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from enterprise_ai_tool_gateway.contracts.schemas import ProposedToolCall
+
 REAL_PROVIDER_SMOKE_FLAG = "ENABLE_REAL_PROVIDER_SMOKE"
 PLACEHOLDER_VALUES = frozenset({"", "change_me", "changeme", "placeholder", "todo", "none", "null"})
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -54,16 +56,6 @@ class ProviderRuntimeError(RuntimeError):
         self.safe_response_excerpt = safe_response_excerpt
 
 
-class ProposedToolCall(BaseModel):
-    """Model-suggested tool call proposal, not an execution authorization."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    arguments: dict[str, object] = Field(default_factory=dict)
-    requires_approval: bool = True
-
-
 class LLMDecisionRequest(BaseModel):
     """Normalized request sent to an LLM provider."""
 
@@ -74,7 +66,7 @@ class LLMDecisionRequest(BaseModel):
 
 
 class LLMDecisionResponse(BaseModel):
-    """Normalized structured decision expected from every provider."""
+    """Provider-spike response kept compatible until workflow contracts adopt schemas."""
 
     model_config = ConfigDict(extra="forbid")
 
