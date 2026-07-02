@@ -6,11 +6,23 @@
 
 ## 2. Current status
 
-Initial MVP development stage.
+MVP development after Stage 4.
 
-The repository contains only the public project skeleton and early project documentation.
+Stage 4 — Core Gateway Foundation is implemented and accepted.
 
-Implementation is not completed yet.
+Implemented foundation packages:
+
+```text
+contracts/
+workflow/
+tools/
+policy/
+approval/
+audit/
+db/
+```
+
+Business workflows, API routes, Web UI, production integrations, auth, workers and migrations are not implemented yet.
 
 ## 3. Purpose
 
@@ -174,29 +186,28 @@ UI must not own business logic.
 
 Development proceeds through staged work.
 
-Each Stage starts with Stage framing before detailed Steps are defined.
+Each Stage starts with Stage framing before detailed Step discussions are defined.
 
 Current accepted top-level Stage Plan:
 
 ```text
-Stage 1 — Repo Bootstrap & Codex Overlay
-Stage 2 — Public Project Docs & Source of Truth
+Stage 0 — Project Orientation & Stage Plan
+Stage 1 — Repo Bootstrap & Public/Private Boundary
+Stage 2 — Source-of-Truth Docs
 Stage 3 — Provider & MCP Technical Spike
 Stage 4 — Core Gateway Foundation
 Stage 5 — Access Request Reference Workflow
-Stage 6 — GigaChat Integration & MCP Hardening
-Stage 7 — Procurement Request Template
-Stage 8 — Maintenance / TOIR-lite Request Template
-Stage 9 — API Consolidation & Backend Demo Surface
-Stage 10 — Eval Harness & Test Coverage
-Stage 11 — Web UI Demo Surface
-Stage 12 — Documentation, Packaging & Portfolio Case
-Stage 13 — Final Review, Fix-loop & Public Release
+Stage 6 — GigaChat & MCP Hardening
+Stage 7 — Demo Template Expansion
+Stage 8 — Backend API, Evals & Acceptance Coverage
+Stage 9 — Web UI Demo Surface
+Stage 10 — Documentation, Packaging & Portfolio Case
+Stage 11 — Final Review, Fix-loop & Public Release
 ```
 
 This plan is a high-level map, not a fixed Step breakdown.
 
-Each Stage must be refined at its own Stage framing step.
+Each Stage must be refined through Stage-specific discussion, accepted decisions, a Stage Brief, implementation, review and fix-loop.
 
 ## 12. Current accepted technical direction
 

@@ -1,452 +1,105 @@
-# LLM Provider Policy
+# Development Checklist
 
-## 1. Purpose
+This checklist defines routine development hygiene for `enterprise-ai-tool-gateway`.
 
-This document defines the current provider, model, structured-output, tool-calling and safety policy for `enterprise-ai-tool-gateway`.
+It is not the provider policy, architecture map, or task workflow. Provider-specific rules live in `docs/LLM_PROVIDER_POLICY.md`; package ownership and entrypoints live in `docs/PROJECT_MAP.md`; accepted project scope lives in `docs/PROJECT_CONTEXT.md`.
 
-It is a project source-of-truth document for provider-related development decisions.
+## 1. Routine Validation
 
-This is not an API reference and not a provider comparison report.
+Run the default validation before handing off code changes:
 
-Current status: initial policy before provider implementation.
-
-Provider-specific details must be validated during implementation / technical spike before they are treated as runtime facts.
-
----
-
-## 2. Provider Strategy
-
-Accepted provider strategy:
-
-| Provider      | Status                | Purpose                                                                   |
-| ------------- | --------------------- | ------------------------------------------------------------------------- |
-| Mock provider | required              | Deterministic local tests, evals and development baseline.                |
-| GigaChat      | primary real provider | Main real provider for MVP.                                               |
-| YandexGPT     | stretch / spike       | Secondary provider if integration is feasible without breaking MVP scope. |
-
-MVP acceptance requires:
-
-* deterministic mock provider;
-* GigaChat adapter or clearly bounded GigaChat integration path;
-* manual real-provider smoke path;
-* no real provider calls in default tests.
-
-YandexGPT is not required for MVP acceptance unless explicitly promoted from stretch to required scope later.
-
----
-
-## 3. Provider Selection Rationale
-
-The project targets the Russian enterprise context.
-
-The MVP should demonstrate practical ability to work with at least one domestic LLM provider directly.
-
-GigaChat is selected as the primary real provider for the first MVP implementation.
-
-YandexGPT remains a planned spike/stretch provider to check how easily the architecture can support a second domestic model.
-
-The project should avoid becoming a multi-provider benchmark in the MVP phase.
-
----
-
-## 4. Provider Abstraction
-
-The runtime must use a provider abstraction.
-
-Planned provider port:
-
-```text id="xv837n"
-LLMProviderPort
-→ generate_structured_decision(request)
-→ LLMDecisionResponse
+```bash
+uv run pytest
+uv run ruff check .
+uv run pyright
+git diff --check
 ```
 
-Provider adapters should hide provider-specific details from workflow orchestration.
+Before commit, also inspect:
 
-Workflow code must not depend directly on:
-
-* provider SDK internals;
-* provider-specific HTTP payload shape;
-* provider-specific auth mechanics;
-* provider-specific raw response format.
-
-The workflow layer should receive a normalized provider response.
-
----
-
-## 5. Required Providers
-
-## 5.1. Mock Provider
-
-The mock provider is required.
-
-Purpose:
-
-* deterministic tests;
-* deterministic evals;
-* local development without external API calls;
-* reproducible behavior during workflow development.
-
-Rules:
-
-* mock provider may be the default local provider;
-* mock provider must not silently replace a failed real provider;
-* mock provider outputs should represent expected structured decisions;
-* mock provider should support success and failure scenarios.
-
-The mock provider is not a proof of real model behavior.
-
----
-
-## 5.2. GigaChat Provider
-
-GigaChat is the primary real provider.
-
-Purpose:
-
-* demonstrate direct domestic LLM integration;
-* test structured decision generation;
-* test provider error handling;
-* test manual smoke flow;
-* validate provider adapter design.
-
-Rules:
-
-* GigaChat calls must be explicitly configured;
-* missing or placeholder credentials must fail early;
-* provider errors must be mapped to safe application errors;
-* raw provider responses must not become normal user-facing output;
-* secrets must not be logged;
-* default tests must not call GigaChat.
-
-Implementation details are not accepted facts until verified in Stage 3 / provider spike.
-
----
-
-## 5.3. YandexGPT Provider
-
-YandexGPT is stretch / spike scope.
-
-Purpose:
-
-* validate whether the provider abstraction supports a second domestic provider;
-* compare implementation friction at a high level;
-* optionally run a small manual smoke if feasible.
-
-Rules:
-
-* YandexGPT must not delay MVP completion unless explicitly promoted to required scope;
-* YandexGPT adapter can remain stubbed or deferred if GigaChat path is enough for MVP;
-* any Yandex-specific behavior must be documented after verification.
-
-Implementation details are not accepted facts until verified.
-
----
-
-## 6. Provider Configuration
-
-Planned environment variables:
-
-```env id="ipf9yf"
-LLM_PROVIDER=mock
-
-GIGACHAT_API_KEY=change_me
-GIGACHAT_MODEL=change_me
-GIGACHAT_BASE_URL=change_me
-
-YANDEX_API_KEY=change_me
-YANDEX_FOLDER_ID=change_me
-YANDEX_MODEL=change_me
-
-LLM_TIMEOUT_SECONDS=60
-LLM_MAX_RETRIES=2
-
-ENABLE_REAL_PROVIDER_SMOKE=0
+```bash
+git status --short --untracked-files=all
 ```
 
-Rules:
+Docs-only changes do not normally require pytest unless they modify commands, paths, or behavior claims that need verification.
 
-* `.env.example` may contain placeholders only;
-* real `.env` must not be committed;
-* placeholder values such as `change_me` must be rejected for real provider calls;
-* provider-specific secrets must not appear in logs, audit events, screenshots or public docs.
+## 2. Test Boundary
 
----
-
-## 7. Structured Output Policy
-
-The runtime must treat LLM output as untrusted until validated.
-
-The preferred model output is a structured decision compatible with the project schema.
-
-Planned decision schema includes:
-
-```text id="xlt2ra"
-request_type
-domain_template
-confidence
-risk_level
-requires_approval
-missing_fields
-proposed_tool_calls
-user_facing_summary
-reason_codes
-```
-
-Rules:
-
-* raw text is not enough to execute tools;
-* structured payload must pass Pydantic validation;
-* unknown enum values must fail validation;
-* unknown tool names must fail validation;
-* malformed arguments must fail validation;
-* invalid structured output must not execute tools;
-* fallback parsing must not bypass validation.
-
-If a provider does not support strict structured output directly, the adapter may parse provider text into a structured payload only if validation remains strict.
-
----
-
-## 8. Tool / Function Calling Policy
-
-The LLM may propose tool calls.
-
-The LLM must not execute tools directly.
-
-Backend owns:
-
-* available tool registry;
-* tool input schemas;
-* tool output schemas;
-* tool permission metadata;
-* tool validation;
-* tool execution;
-* policy checks;
-* approval gates;
-* audit trail.
-
-Provider-native function/tool calling may be used if useful, but it must not replace backend control.
-
-Provider-native tool call output must still pass project validation before any tool is executed.
-
-Rules:
-
-* model-suggested tool calls are proposals;
-* backend decides whether a tool call is valid;
-* backend decides whether a tool call requires approval;
-* backend executes tools only through controlled tool/MCP boundary;
-* state-changing tools must not run before policy and approval checks.
-
----
-
-## 9. MCP / Tool Boundary Relation
-
-MCP or MCP-like tool server is an integration boundary.
-
-MCP is not the safety model by itself.
-
-Safety remains backend-owned through:
-
-* schema validation;
-* tool registry;
-* policy checks;
-* approval gates;
-* audit trail;
-* safe error handling.
-
-Preferred implementation:
-
-```text id="evxwna"
-LLM structured decision
-→ backend validation
-→ ToolRegistry
-→ MCP / MCP-like boundary
-→ tool execution
-→ audit
-```
-
-Fallback implementation may use a FastAPI MCP-like tool server if real MCP blocks MVP delivery.
-
-Fallback must still preserve explicit tool schemas, validation and audit.
-
----
-
-## 10. Real Provider Smoke Policy
-
-Manual real-provider smoke tests are allowed.
-
-They must be explicit.
-
-Required properties:
-
-* disabled by default;
-* require environment flag;
-* require real non-placeholder credentials;
-* print safe summaries only;
-* avoid exposing raw provider payloads unless explicitly safe;
-* never run as part of default pytest.
-
-Suggested flag:
-
-```env id="t74wp1"
-ENABLE_REAL_PROVIDER_SMOKE=1
-```
-
-Manual smoke should verify:
-
-* provider auth works;
-* simple structured decision call works;
-* provider errors are safely mapped;
-* no secrets are printed;
-* result can be validated by project schema.
-
----
-
-## 11. Eval Policy
-
-Default evals should use the deterministic mock provider.
-
-Eval scenarios should test workflow behavior, not only provider text quality.
-
-Planned metrics:
-
-```text id="u0ot3q"
-schema_valid_rate
-request_type_accuracy
-missing_fields_accuracy
-tool_selection_accuracy
-approval_detection_accuracy
-forbidden_action_block_rate
-final_status_accuracy
-```
-
-Real provider evals may be added later as manual or opt-in runs.
-
-Real provider evals must not be treated as deterministic tests.
-
----
-
-## 12. Error Handling Policy
-
-Provider errors must be mapped to safe application errors.
-
-Error categories may include:
-
-```text id="4ru5v2"
-PROVIDER_AUTH_ERROR
-PROVIDER_TIMEOUT
-PROVIDER_RATE_LIMIT
-PROVIDER_INVALID_RESPONSE
-PROVIDER_UNAVAILABLE
-LLM_OUTPUT_VALIDATION_ERROR
-```
-
-Rules:
-
-* user-facing errors must be safe;
-* raw provider exceptions must not leak to normal users;
-* stack traces must not be exposed through API;
-* internal error details may be recorded only after redaction;
-* failed provider call must not silently switch to mock.
-
----
-
-## 13. Audit and Logging Policy
-
-Audit should record meaningful provider-related events:
-
-* provider selected;
-* model name, if safe;
-* schema version;
-* decision validation status;
-* provider error category;
-* latency metadata, if available;
-* final workflow status.
-
-Audit must not record:
-
-* API keys;
-* bearer tokens;
-* authorization headers;
-* raw secrets;
-* full sensitive provider payloads by default;
-* unredacted internal stack traces.
-
-Raw provider response, if persisted at all, must be internal-only and safe by design.
-
----
-
-## 14. No Silent Fallback Rule
-
-The project must not silently hide provider failures.
-
-Forbidden:
-
-```text id="l8ok5n"
-GigaChat fails → silently use mock → return success
-```
-
-Allowed:
-
-```text id="z9amxr"
-GigaChat fails → return safe provider error
-GigaChat not configured → fail early for real provider mode
-mock mode explicitly configured → use mock
-```
-
-A fallback between real providers may be considered in a later stage, but it is not MVP scope.
-
----
-
-## 15. Default Test Boundary
-
-Default tests must be offline and deterministic.
+Default tests must be deterministic and offline.
 
 Default tests must not require:
 
-* GigaChat credentials;
-* Yandex credentials;
+* real provider credentials;
 * network access;
-* real provider availability;
-* real enterprise integrations.
+* GigaChat or Yandex availability;
+* real MCP network services;
+* real enterprise systems.
 
-Provider adapters should be tested with fake transports or mocked HTTP clients unless running explicit manual smoke.
+Use deterministic mocks, fake transports, local in-memory storage, or local smoke utilities where appropriate.
 
----
+## 3. Manual Smoke Boundary
 
-## 16. Public Documentation Boundary
+Real provider and MCP smoke checks are manual/explicit only.
 
-Public documentation may describe:
+Allowed manual utilities include:
 
-* accepted provider strategy;
-* mock/GigaChat/Yandex roles;
-* structured-output policy;
-* tool-calling policy;
-* safety boundaries;
-* manual smoke boundary.
+```bash
+uv run python scripts/mcp_smoke.py
+uv run python scripts/manual_gigachat_smoke.py
+```
 
-Public documentation must not include:
+Real provider smoke must be disabled by default, require an explicit opt-in flag, reject placeholder credentials, and print safe summaries only.
 
-* real credentials;
-* private tokens;
-* raw provider logs with sensitive data;
-* paid account details;
-* local secrets;
-* private operational notes.
+## 4. Stage 4 Foundation Awareness
 
----
+Stage 4 core foundation packages are implemented:
 
-## 17. Update Rule
+```text
+contracts/
+workflow/
+tools/
+policy/
+approval/
+audit/
+db/
+```
 
-This document must be updated when:
+Do not bypass these boundaries when adding later stages:
 
-* provider strategy changes;
-* GigaChat implementation details are verified;
-* Yandex moves from stretch to required scope;
-* structured output strategy changes;
-* tool/function calling strategy changes;
-* real-provider smoke commands change;
-* default tests start or stop using any provider-related behavior;
-* provider error handling changes.
+* LLM output is untrusted until backend validation accepts it.
+* Tools execute only through the controlled tool boundary.
+* State-changing tools require policy checks.
+* Risky state-changing tools require approval.
+* Audit events must not contain secrets.
+* DB persistence stores already validated facts and must not own workflow or policy decisions.
 
-Do not describe unverified provider behavior as implemented fact.
+## 5. Source-of-Truth Docs
+
+Durable project facts belong in source-of-truth docs:
+
+* `docs/PROJECT_CONTEXT.md` for accepted scope, status, non-goals and boundaries;
+* `docs/PROJECT_MAP.md` for package map, dependency direction and entrypoints;
+* `docs/LLM_PROVIDER_POLICY.md` for provider/model/tool-calling policy;
+* `docs/DEVELOPMENT_CHECKLIST.md` for development and validation hygiene.
+
+`docs/codex/` task envelopes, plans, stage briefs and reports are local workflow artifacts. They can inform implementation while active, but they are not durable source of truth.
+
+## 6. Local Artifacts
+
+Do not commit temporary review or patch artifacts.
+
+Local `*.diff` and `*.patch` files are ignored and should remain local unless a task explicitly asks for a committed patch artifact.
+
+Delete completed Codex workflow artifacts when their durable facts have been accepted into source-of-truth docs or code and they are no longer useful for future work.
+
+## 7. Secret Hygiene
+
+Never commit or expose:
+
+* real API keys, bearer tokens, authorization headers or cookies;
+* `.env` files with real credentials;
+* raw provider logs containing secrets;
+* screenshots or docs that reveal private credentials;
+* unredacted audit payloads with credential-like fields.
+
+Use placeholders only in public examples and ensure real-provider paths fail early on missing or placeholder credentials.
