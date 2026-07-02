@@ -16,6 +16,10 @@ data/
 *.sqlite3
 *.log
 
+# Local review artifacts
+*.diff
+*.patch
+
 # Python
 __pycache__/
 *.py[cod]

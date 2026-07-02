@@ -10,16 +10,23 @@ from enterprise_ai_tool_gateway.contracts import (
     AgentRunCreate,
     AgentRunRead,
     AgentRunStatus,
+    ApprovalCreate,
+    ApprovalMode,
     ApprovalRead,
     ApprovalStatus,
+    AuditEventCreate,
     AuditEventRead,
     AuditEventType,
     DomainTemplate,
+    LLMDecisionCreate,
     LLMDecisionPayload,
+    LLMDecisionRead,
+    PolicyDecisionStatus,
     ProviderName,
     ProposedToolCall,
     RequestType,
     RiskLevel,
+    ToolCallCreate,
     ToolCallRead,
     ToolCallStatus,
     ToolType,
@@ -82,6 +89,17 @@ def test_core_enum_values_are_stable_strings() -> None:
         "REJECTED",
         "CANCELLED",
     ]
+    assert [item.value for item in PolicyDecisionStatus] == [
+        "ALLOWED",
+        "DENIED",
+        "REQUIRES_APPROVAL",
+        "NEEDS_MANUAL_REVIEW",
+    ]
+    assert [item.value for item in ApprovalMode] == [
+        "AUTO_APPROVE",
+        "HIGH_RISK_ONLY",
+        "ALWAYS_REQUIRE",
+    ]
     assert [item.value for item in ProviderName] == ["MOCK", "GIGACHAT", "YANDEX"]
     assert [item.value for item in AuditEventType] == [
         "RUN_CREATED",
@@ -93,6 +111,9 @@ def test_core_enum_values_are_stable_strings() -> None:
         "POLICY_CHECKED",
         "APPROVAL_REQUESTED",
         "APPROVAL_DECIDED",
+        "USER_INPUT_REQUIRED",
+        "MANUAL_REVIEW_REQUIRED",
+        "RUN_REJECTED",
         "RUN_COMPLETED",
         "RUN_FAILED",
     ]
@@ -178,6 +199,7 @@ def test_read_contracts_validate_minimal_foundation_shapes() -> None:
         risk_level=None,
         requires_approval=False,
         provider_name=ProviderName.MOCK,
+        model_name="mock-model",
         final_summary=None,
         error_type=None,
         error_message=None,
@@ -221,9 +243,57 @@ def test_read_contracts_validate_minimal_foundation_shapes() -> None:
     )
 
     assert run.id == run_id
+    assert run.model_name == "mock-model"
     assert tool_call.approval_id == approval_id
     assert approval.tool_call_id == tool_call_id
     assert event.payload == {"status": "CREATED"}
+
+
+def test_stage_4_create_and_read_contracts_validate_foundation_shapes() -> None:
+    now = datetime.now(UTC)
+    run_id = uuid4()
+    decision_id = uuid4()
+    tool_call_id = uuid4()
+
+    decision_create = LLMDecisionCreate(
+        run_id=run_id,
+        validated_payload={"request_type": RequestType.UNKNOWN.value},
+        schema_valid=True,
+        confidence=0.7,
+    )
+    decision_read = LLMDecisionRead(
+        id=decision_id,
+        run_id=run_id,
+        schema_version="1.0",
+        validated_payload=decision_create.validated_payload,
+        schema_valid=True,
+        validation_errors=[],
+        confidence=0.7,
+        created_at=now,
+    )
+    tool_call_create = ToolCallCreate(
+        run_id=run_id,
+        tool_name="fake_policy_lookup",
+        tool_type=ToolType.READ_ONLY,
+        input_payload={"request_type": RequestType.UNKNOWN.value},
+        requires_approval=False,
+    )
+    approval_create = ApprovalCreate(
+        run_id=run_id,
+        tool_call_id=tool_call_id,
+        required_approver_role="manager",
+        summary="Approve action",
+    )
+    audit_create = AuditEventCreate(
+        run_id=run_id,
+        event_type=AuditEventType.USER_INPUT_REQUIRED,
+        payload={"missing_fields": ["system"]},
+    )
+
+    assert decision_read.run_id == decision_create.run_id
+    assert tool_call_create.status is ToolCallStatus.PROPOSED
+    assert approval_create.status is ApprovalStatus.PENDING
+    assert audit_create.actor == "system"
 
 
 @pytest.mark.asyncio
@@ -232,7 +302,11 @@ async def test_existing_mock_provider_uses_shared_decision_contract() -> None:
         LLMDecisionRequest(user_request="Нужен доступ к CRM.")
     )
 
+    payload = LLMDecisionPayload.model_validate(decision.model_dump())
+
     assert decision.request_type == RequestType.ACCESS_REQUEST
     assert decision.domain_template == "ACCESS_REQUEST"
+    assert payload.request_type is RequestType.ACCESS_REQUEST
+    assert payload.domain_template is DomainTemplate.ACCESS
     assert isinstance(decision.proposed_tool_calls[0], ProposedToolCall)
-    assert decision.proposed_tool_calls[0].name == "create_access_request_draft"
+    assert payload.proposed_tool_calls[0].name == "create_access_request_draft"

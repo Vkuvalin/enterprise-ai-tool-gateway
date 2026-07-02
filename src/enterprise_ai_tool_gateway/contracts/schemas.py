@@ -75,11 +75,46 @@ class AgentRunRead(ContractModel):
     risk_level: RiskLevel | None = None
     requires_approval: bool = False
     provider_name: ProviderName | None = None
+    model_name: str | None = None
     final_summary: str | None = None
     error_type: str | None = None
     error_message: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class LLMDecisionCreate(ContractModel):
+    run_id: UUID
+    schema_version: str = "1.0"
+    raw_response_ref: str | None = None
+    validated_payload: dict[str, object] = Field(default_factory=dict)
+    schema_valid: bool
+    validation_errors: list[object] = Field(default_factory=list)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class LLMDecisionRead(ContractModel):
+    id: UUID
+    run_id: UUID
+    schema_version: str
+    raw_response_ref: str | None = None
+    validated_payload: dict[str, object] = Field(default_factory=dict)
+    schema_valid: bool
+    validation_errors: list[object] = Field(default_factory=list)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    created_at: datetime
+
+
+class ToolCallCreate(ContractModel):
+    run_id: UUID
+    tool_name: str
+    tool_type: ToolType
+    status: ToolCallStatus = ToolCallStatus.PROPOSED
+    input_payload: dict[str, object] = Field(default_factory=dict)
+    output_payload: dict[str, object] | None = None
+    error_message: str | None = None
+    requires_approval: bool
+    approval_id: UUID | None = None
 
 
 class ToolCallRead(ContractModel):
@@ -97,6 +132,17 @@ class ToolCallRead(ContractModel):
     updated_at: datetime
 
 
+class ApprovalCreate(ContractModel):
+    run_id: UUID
+    tool_call_id: UUID | None = None
+    status: ApprovalStatus = ApprovalStatus.PENDING
+    required_approver_role: str
+    summary: str
+    reason: str | None = None
+    decided_by: str | None = None
+    decision_comment: str | None = None
+
+
 class ApprovalRead(ContractModel):
     id: UUID
     run_id: UUID
@@ -109,6 +155,13 @@ class ApprovalRead(ContractModel):
     decision_comment: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class AuditEventCreate(ContractModel):
+    run_id: UUID
+    event_type: AuditEventType
+    actor: str = "system"
+    payload: dict[str, object] = Field(default_factory=dict)
 
 
 class AuditEventRead(ContractModel):
