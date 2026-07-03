@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from enterprise_ai_tool_gateway.contracts.enums import (
     AgentRunStatus,
+    ApprovalMode,
     DomainTemplate,
     RequestType,
 )
@@ -30,6 +31,11 @@ class AgentRunModel(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid_string)
     user_id: Mapped[str] = mapped_column(String(255), nullable=False)
     request_text: Mapped[str] = mapped_column(Text, nullable=False)
+    approval_mode: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default=ApprovalMode.HIGH_RISK_ONLY.value,
+    )
     request_type: Mapped[str] = mapped_column(
         String(64),
         nullable=False,

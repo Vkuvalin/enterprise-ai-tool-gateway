@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from enterprise_ai_tool_gateway.contracts.enums import (
     AgentRunStatus,
+    ApprovalMode,
     ApprovalStatus,
     AuditEventType,
     DomainTemplate,
@@ -37,6 +38,7 @@ class ContractModel(BaseModel):
 class AgentRunCreate(ContractModel):
     user_id: str
     request_text: str
+    approval_mode: ApprovalMode = ApprovalMode.HIGH_RISK_ONLY
 
 
 class ProposedToolCall(ContractModel):
@@ -69,6 +71,7 @@ class AgentRunRead(ContractModel):
     id: UUID
     user_id: str
     request_text: str
+    approval_mode: ApprovalMode = ApprovalMode.HIGH_RISK_ONLY
     request_type: RequestType = RequestType.UNKNOWN
     domain_template: DomainTemplate = DomainTemplate.UNKNOWN
     status: AgentRunStatus

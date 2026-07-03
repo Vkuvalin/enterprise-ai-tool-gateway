@@ -130,6 +130,12 @@ def test_agent_run_create_forbids_extra_fields() -> None:
         )
 
 
+def test_agent_run_create_defaults_approval_mode() -> None:
+    create = AgentRunCreate(user_id="user-1", request_text="Need access")
+
+    assert create.approval_mode is ApprovalMode.HIGH_RISK_ONLY
+
+
 def test_llm_decision_payload_validates_enums_and_nested_tools() -> None:
     decision = LLMDecisionPayload(
         request_type=RequestType.ACCESS_REQUEST,
@@ -193,6 +199,7 @@ def test_read_contracts_validate_minimal_foundation_shapes() -> None:
         id=run_id,
         user_id="user-1",
         request_text="Need access",
+        approval_mode=ApprovalMode.ALWAYS_REQUIRE,
         request_type=RequestType.ACCESS_REQUEST,
         domain_template=DomainTemplate.ACCESS,
         status=AgentRunStatus.CREATED,
@@ -243,6 +250,7 @@ def test_read_contracts_validate_minimal_foundation_shapes() -> None:
     )
 
     assert run.id == run_id
+    assert run.approval_mode is ApprovalMode.ALWAYS_REQUIRE
     assert run.model_name == "mock-model"
     assert tool_call.approval_id == approval_id
     assert approval.tool_call_id == tool_call_id

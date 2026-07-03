@@ -13,6 +13,7 @@ from enterprise_ai_tool_gateway.contracts import (
     AgentRunCreate,
     AgentRunStatus,
     ApprovalCreate,
+    ApprovalMode,
     ApprovalStatus,
     AuditEventCreate,
     AuditEventType,
@@ -32,6 +33,7 @@ from enterprise_ai_tool_gateway.db import (
     create_database_schema,
 )
 from enterprise_ai_tool_gateway.db.models import (
+    AgentRunModel,
     ApprovalModel,
     LLMDecisionModel,
     ToolCallModel,
@@ -101,7 +103,11 @@ async def test_create_async_engine_session_and_schema() -> None:
 
     try:
         run = await repo.create_agent_run(
-            AgentRunCreate(user_id="user-1", request_text="Need access."),
+            AgentRunCreate(
+                user_id="user-1",
+                request_text="Need access.",
+                approval_mode=ApprovalMode.AUTO_APPROVE,
+            ),
             request_type=RequestType.ACCESS_REQUEST,
             domain_template=DomainTemplate.ACCESS,
             risk_level=RiskLevel.MEDIUM,
@@ -110,10 +116,16 @@ async def test_create_async_engine_session_and_schema() -> None:
             model_name="mock-model",
         )
         read_run = await repo.get_agent_run(run.id)
+        persisted_run = await session.scalar(
+            select(AgentRunModel).where(AgentRunModel.id == str(run.id))
+        )
 
         assert read_run == run
         assert read_run is not None
+        assert read_run.approval_mode is ApprovalMode.AUTO_APPROVE
         assert read_run.model_name == "mock-model"
+        assert persisted_run is not None
+        assert persisted_run.approval_mode == ApprovalMode.AUTO_APPROVE.value
     finally:
         await _close_repository(engine, session)
 
@@ -202,6 +214,71 @@ async def test_update_status_persists_without_validating_transition() -> None:
         assert updated.status is AgentRunStatus.COMPLETED
         assert read_run is not None
         assert read_run.status is AgentRunStatus.COMPLETED
+    finally:
+        await _close_repository(engine, session)
+
+
+@pytest.mark.asyncio
+async def test_repository_stage_5_update_and_list_methods() -> None:
+    repo, engine, session = await _build_repository()
+
+    try:
+        run = await repo.create_agent_run(
+            AgentRunCreate(user_id="user-1", request_text="Need access.")
+        )
+        tool_call = await repo.add_tool_call(
+            ToolCallCreate(
+                run_id=run.id,
+                tool_name="create_access_request_draft",
+                tool_type=ToolType.STATE_CHANGING,
+                status=ToolCallStatus.WAITING_FOR_APPROVAL,
+                input_payload={"employee_id": "emp-001"},
+                requires_approval=True,
+            )
+        )
+        approval = await repo.add_approval(
+            ApprovalCreate(
+                run_id=run.id,
+                tool_call_id=tool_call.id,
+                required_approver_role="system_owner",
+                summary="Approve access draft.",
+            )
+        )
+
+        updated_tool_call = await repo.update_tool_call_result(
+            tool_call.id,
+            status=ToolCallStatus.SUCCEEDED,
+            output_payload={"draft_id": "draft-1"},
+            approval_id=approval.id,
+        )
+        updated_approval = await repo.update_approval_decision(
+            approval.id,
+            status=ApprovalStatus.APPROVED,
+            decided_by="system-owner-1",
+            decision_comment="Approved.",
+        )
+        updated_run = await repo.update_agent_run_result(
+            run.id,
+            status=AgentRunStatus.COMPLETED,
+            request_type=RequestType.ACCESS_REQUEST,
+            domain_template=DomainTemplate.ACCESS,
+            risk_level=RiskLevel.HIGH,
+            requires_approval=False,
+            provider_name=ProviderName.MOCK,
+            model_name="mock-provider",
+            final_summary="Draft created.",
+        )
+
+        assert updated_tool_call.output_payload == {"draft_id": "draft-1"}
+        assert updated_tool_call.approval_id == approval.id
+        assert updated_approval.status is ApprovalStatus.APPROVED
+        assert updated_approval.decided_by == "system-owner-1"
+        assert updated_run.status is AgentRunStatus.COMPLETED
+        assert updated_run.final_summary == "Draft created."
+        assert await repo.get_tool_call(tool_call.id) == updated_tool_call
+        assert await repo.get_approval(approval.id) == updated_approval
+        assert await repo.list_tool_calls(run.id) == [updated_tool_call]
+        assert await repo.list_approvals(run.id) == [updated_approval]
     finally:
         await _close_repository(engine, session)
 

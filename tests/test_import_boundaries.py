@@ -71,10 +71,29 @@ FORBIDDEN_IMPORTS = {
         "llm",
         "api",
     ),
+    "access": (
+        "workflow",
+        "policy",
+        "approval",
+        "audit",
+        "db",
+        "llm",
+        "api",
+    ),
+    "demo_domain": (
+        "workflow",
+        "tools",
+        "policy",
+        "approval",
+        "audit",
+        "db",
+        "llm",
+        "api",
+    ),
 }
 
 
-def test_stage_4_foundation_packages_do_not_import_forbidden_siblings() -> None:
+def test_stage_4_and_5_packages_do_not_import_forbidden_siblings() -> None:
     violations: list[str] = []
 
     for package_name, forbidden_packages in FORBIDDEN_IMPORTS.items():
