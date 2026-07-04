@@ -1,60 +1,50 @@
-"""Minimal MCP server spike with one fake local tool."""
+"""Local deterministic fake MCP server for Stage 6 boundary checks."""
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import ValidationError
+
+from enterprise_ai_tool_gateway.mcp.boundary import (
+    DEMO_SYSTEM_STATUS_TOOL,
+    DemoSystemStatusOutput,
+    MCPSchemaValidationError,
+    build_demo_system_status,
+    extract_mcp_result_object,
+)
 
 mcp = FastMCP(
-    "enterprise-ai-tool-gateway-spike",
-    instructions="Local spike server exposing one safe fake tool.",
+    "enterprise-ai-tool-gateway-local-demo",
+    instructions="Local fake MCP boundary exposing deterministic non-enterprise tools.",
 )
 
 
 @mcp.tool()
-def fake_policy_lookup(request_type: str) -> dict[str, Any]:
-    """Return deterministic policy metadata for one request type."""
+def get_demo_system_status(system_id: str = "gateway-demo") -> dict[str, Any]:
+    """Return deterministic fake system status for MCP boundary validation."""
 
-    normalized = request_type.strip().upper() or "UNKNOWN"
-    requires_approval = normalized in {
-        "ACCESS_REQUEST",
-        "PROCUREMENT_REQUEST",
-        "MAINTENANCE_REQUEST",
-    }
-    return {
-        "request_type": normalized,
-        "requires_approval": requires_approval,
-        "policy_version": "stage3-spike",
-    }
+    return build_demo_system_status({"system_id": system_id}).model_dump(mode="json")
 
 
-async def list_spike_tools() -> list[str]:
-    """List tools registered on the spike MCP server."""
+async def list_demo_tools() -> list[str]:
+    """List tools available through the local fake boundary."""
 
     tools = await mcp.list_tools()
     return [tool.name for tool in tools]
 
 
-async def call_fake_policy_lookup(request_type: str) -> dict[str, Any]:
-    """Call the fake tool through FastMCP's local tool path."""
+async def call_get_demo_system_status(system_id: str = "gateway-demo") -> dict[str, object]:
+    """Call and validate the fake MCP tool through the registered FastMCP path."""
 
-    result = await mcp.call_tool("fake_policy_lookup", {"request_type": request_type})
-    if isinstance(result, dict):
-        return result
-    if isinstance(result, tuple):
-        for item in result:
-            if isinstance(item, dict):
-                return item
-            if isinstance(item, list):
-                for content_block in item:
-                    text = getattr(content_block, "text", None)
-                    if isinstance(text, str):
-                        parsed = json.loads(text)
-                        if isinstance(parsed, dict):
-                            return parsed
-    raise TypeError(f"Unexpected MCP tool result type: {type(result).__name__}")
+    raw_result = await mcp.call_tool(DEMO_SYSTEM_STATUS_TOOL, {"system_id": system_id})
+    raw_object = extract_mcp_result_object(raw_result, tool_name=DEMO_SYSTEM_STATUS_TOOL)
+    try:
+        validated = DemoSystemStatusOutput.model_validate(raw_object)
+    except ValidationError as exc:
+        raise MCPSchemaValidationError(tool_name=DEMO_SYSTEM_STATUS_TOOL) from exc
+    return validated.model_dump(mode="json")
 
 
 if __name__ == "__main__":

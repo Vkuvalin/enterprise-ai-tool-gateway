@@ -1,4 +1,4 @@
-"""Minimal provider contracts for the Stage 3 technical spike."""
+"""LLM provider boundary contracts and safe provider errors."""
 
 from __future__ import annotations
 
@@ -7,10 +7,13 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Mapping, Protocol, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from enterprise_ai_tool_gateway.contracts.schemas import ProposedToolCall
+from enterprise_ai_tool_gateway.contracts.schemas import (
+    LLMDecisionPayload,
+    ProposedToolCall as ProposedToolCall,
+)
 
 REAL_PROVIDER_SMOKE_FLAG = "ENABLE_REAL_PROVIDER_SMOKE"
 PLACEHOLDER_VALUES = frozenset({"", "change_me", "changeme", "placeholder", "todo", "none", "null"})
@@ -25,7 +28,7 @@ class _SmokeEnvSettings(BaseSettings):
 
 
 class ProviderErrorCategory(StrEnum):
-    """Safe provider error categories from the provider policy."""
+    """Safe provider error categories persisted by application runtimes."""
 
     AUTH_ERROR = "PROVIDER_AUTH_ERROR"
     TIMEOUT = "PROVIDER_TIMEOUT"
@@ -35,25 +38,220 @@ class ProviderErrorCategory(StrEnum):
     NOT_CONFIGURED = "PROVIDER_NOT_CONFIGURED"
 
 
-class ProviderConfigurationError(RuntimeError):
+class ProviderError(RuntimeError):
+    """Base provider error with redacted context only."""
+
+    def __init__(
+        self,
+        safe_message: str,
+        *,
+        reason_code: str,
+        provider_name: str = "unknown",
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(safe_message)
+        self.safe_message = safe_message
+        self.reason_code = reason_code
+        self.provider_name = provider_name
+        self.model_name = model_name
+
+    def safe_context(self) -> dict[str, str | None]:
+        """Return context safe for logs, reports, and user-facing errors."""
+
+        return {
+            "safe_message": self.safe_message,
+            "reason_code": self.reason_code,
+            "provider_name": self.provider_name,
+            "model_name": self.model_name,
+        }
+
+    def __str__(self) -> str:
+        return self.safe_message
+
+
+class ProviderConfigurationError(ProviderError):
     """Raised before a real-provider call when required settings are unsafe."""
 
+    def __init__(
+        self,
+        safe_message: str,
+        *,
+        reason_code: str = "provider_configuration_error",
+        provider_name: str = "unknown",
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(
+            safe_message,
+            reason_code=reason_code,
+            provider_name=provider_name,
+            model_name=model_name,
+        )
 
-class ProviderRuntimeError(RuntimeError):
+
+class ProviderRuntimeError(ProviderError):
     """Raised after a real-provider call fails in a safe, categorized way."""
 
     def __init__(
         self,
         category: ProviderErrorCategory,
-        message: str,
+        safe_message: str,
         *,
+        reason_code: str | None = None,
+        provider_name: str = "unknown",
+        model_name: str | None = None,
         http_status_code: int | None = None,
         safe_response_excerpt: str | None = None,
     ) -> None:
-        super().__init__(message)
+        super().__init__(
+            safe_message,
+            reason_code=reason_code or category.value,
+            provider_name=provider_name,
+            model_name=model_name,
+        )
         self.category = category
         self.http_status_code = http_status_code
         self.safe_response_excerpt = safe_response_excerpt
+
+
+class ProviderAuthenticationError(ProviderRuntimeError):
+    """Authentication or authorization failed at the provider boundary."""
+
+    def __init__(
+        self,
+        safe_message: str = "Provider authentication failed.",
+        *,
+        reason_code: str = "provider_authentication_failed",
+        provider_name: str = "unknown",
+        model_name: str | None = None,
+        http_status_code: int | None = None,
+        safe_response_excerpt: str | None = None,
+    ) -> None:
+        super().__init__(
+            ProviderErrorCategory.AUTH_ERROR,
+            safe_message,
+            reason_code=reason_code,
+            provider_name=provider_name,
+            model_name=model_name,
+            http_status_code=http_status_code,
+            safe_response_excerpt=safe_response_excerpt,
+        )
+
+
+class ProviderTransportError(ProviderRuntimeError):
+    """Provider request failed because transport or availability failed."""
+
+    def __init__(
+        self,
+        safe_message: str = "Provider transport failed.",
+        *,
+        reason_code: str = "provider_transport_failed",
+        provider_name: str = "unknown",
+        model_name: str | None = None,
+        category: ProviderErrorCategory = ProviderErrorCategory.UNAVAILABLE,
+        http_status_code: int | None = None,
+        safe_response_excerpt: str | None = None,
+    ) -> None:
+        super().__init__(
+            category,
+            safe_message,
+            reason_code=reason_code,
+            provider_name=provider_name,
+            model_name=model_name,
+            http_status_code=http_status_code,
+            safe_response_excerpt=safe_response_excerpt,
+        )
+
+
+class ProviderRateLimitError(ProviderRuntimeError):
+    """Provider rejected the request because of rate limiting."""
+
+    def __init__(
+        self,
+        safe_message: str = "Provider rate limit was reached.",
+        *,
+        reason_code: str = "provider_rate_limited",
+        provider_name: str = "unknown",
+        model_name: str | None = None,
+        http_status_code: int | None = None,
+        safe_response_excerpt: str | None = None,
+    ) -> None:
+        super().__init__(
+            ProviderErrorCategory.RATE_LIMIT,
+            safe_message,
+            reason_code=reason_code,
+            provider_name=provider_name,
+            model_name=model_name,
+            http_status_code=http_status_code,
+            safe_response_excerpt=safe_response_excerpt,
+        )
+
+
+class ProviderResponseError(ProviderRuntimeError):
+    """Provider returned a malformed or unsupported response."""
+
+    def __init__(
+        self,
+        safe_message: str = "Provider response was invalid.",
+        *,
+        reason_code: str = "provider_response_invalid",
+        provider_name: str = "unknown",
+        model_name: str | None = None,
+        http_status_code: int | None = None,
+        safe_response_excerpt: str | None = None,
+    ) -> None:
+        super().__init__(
+            ProviderErrorCategory.INVALID_RESPONSE,
+            safe_message,
+            reason_code=reason_code,
+            provider_name=provider_name,
+            model_name=model_name,
+            http_status_code=http_status_code,
+            safe_response_excerpt=safe_response_excerpt,
+        )
+
+
+class ProviderSchemaValidationError(ProviderRuntimeError):
+    """Provider text could not become a validated decision payload."""
+
+    def __init__(
+        self,
+        safe_message: str = "Provider output failed schema validation.",
+        *,
+        reason_code: str = "provider_schema_validation_failed",
+        provider_name: str = "unknown",
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(
+            ProviderErrorCategory.INVALID_RESPONSE,
+            safe_message,
+            reason_code=reason_code,
+            provider_name=provider_name,
+            model_name=model_name,
+        )
+
+
+class ProviderModelUnavailableError(ProviderRuntimeError):
+    """Requested provider model is unavailable or unsupported."""
+
+    def __init__(
+        self,
+        safe_message: str = "Provider model is unavailable.",
+        *,
+        reason_code: str = "provider_model_unavailable",
+        provider_name: str = "unknown",
+        model_name: str | None = None,
+        http_status_code: int | None = None,
+        safe_response_excerpt: str | None = None,
+    ) -> None:
+        super().__init__(
+            ProviderErrorCategory.INVALID_RESPONSE,
+            safe_message,
+            reason_code=reason_code,
+            provider_name=provider_name,
+            model_name=model_name,
+            http_status_code=http_status_code,
+            safe_response_excerpt=safe_response_excerpt,
+        )
 
 
 class LLMDecisionRequest(BaseModel):
@@ -65,20 +263,8 @@ class LLMDecisionRequest(BaseModel):
     request_id: str = "local-spike"
 
 
-class LLMDecisionResponse(BaseModel):
-    """Provider-spike response kept compatible until workflow contracts adopt schemas."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    request_type: str
-    domain_template: str
-    confidence: float = Field(ge=0.0, le=1.0)
-    risk_level: str
-    requires_approval: bool
-    missing_fields: list[str] = Field(default_factory=list)
-    proposed_tool_calls: list[ProposedToolCall] = Field(default_factory=list)
-    user_facing_summary: str
-    reason_codes: list[str] = Field(default_factory=list)
+class LLMDecisionResponse(LLMDecisionPayload):
+    """Compatibility name for the canonical provider decision payload."""
 
 
 class LLMProviderPort(Protocol):
@@ -125,5 +311,6 @@ def require_real_provider_smoke_enabled(
 
     if not is_real_provider_smoke_enabled(env, env_file=env_file):
         raise ProviderConfigurationError(
-            f"{REAL_PROVIDER_SMOKE_FLAG}=1 is required for real provider smoke calls"
+            f"{REAL_PROVIDER_SMOKE_FLAG}=1 is required for real provider smoke calls",
+            reason_code="real_provider_smoke_not_enabled",
         )

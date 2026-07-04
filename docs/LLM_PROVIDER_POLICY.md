@@ -8,11 +8,13 @@ It is a project source-of-truth document for provider-related development decisi
 
 This is not an API reference and not a provider comparison report.
 
-Current status: Stage 3 technical spike completed for provider and MCP feasibility.
+Current status: Stage 6 provider and MCP boundary hardening is implemented for
+MVP use. The implementation remains practical and bounded, not a production
+provider platform.
 
-Production provider implementation is still pending. Spike files verify dependency
-resolution, request-shape helpers, credential gating, deterministic mock behavior
-and local MCP feasibility only.
+Stage 6 hardens optional/manual GigaChat use, deterministic structured-output
+validation, safe provider errors, and a local fake MCP external boundary while
+keeping default tests deterministic and offline.
 
 ---
 
@@ -60,7 +62,7 @@ Planned provider port:
 ```text id="xv837n"
 LLMProviderPort
 → generate_structured_decision(request)
-→ LLMDecisionResponse
+→ LLMDecisionPayload-compatible response
 ```
 
 Provider adapters should hide provider-specific details from workflow orchestration.
@@ -72,7 +74,9 @@ Workflow code must not depend directly on:
 * provider-specific auth mechanics;
 * provider-specific raw response format.
 
-The workflow layer should receive a normalized provider response.
+The workflow layer should receive a normalized response that validates through
+`LLMDecisionPayload`. Provider-specific HTTP response parsing stays inside the
+provider adapter.
 
 ---
 
@@ -121,8 +125,8 @@ Rules:
 * secrets must not be logged;
 * default tests must not call GigaChat.
 
-Stage 3 verified a direct `httpx` GigaChat path as the preferred production
-candidate for the next implementation stage.
+Stage 3 verified a direct `httpx` GigaChat path as the preferred implementation
+candidate.
 
 Manual GigaChat PERS smoke confirmed auth, token acquisition, model listing and simple chat completion.
 
@@ -130,16 +134,21 @@ Strict `response_format=json_schema` structured output was not accepted in the c
 
 The MVP must not depend on provider-enforced schema compliance for GigaChat PERS. Backend validation remains mandatory.
 
-Verified spike details:
+Implemented Stage 6 details:
 
 * token acquisition uses the OAuth endpoint configured by `GIGACHAT_AUTH_URL`;
 * chat completions use a configurable `GIGACHAT_BASE_URL` and `/chat/completions`;
-* structured decisions use a strict JSON-schema response format based on the
-  project decision schema;
-* provider-native function calling can be represented as proposals through the
-  GigaChat `functions` / `function_call` payload shape;
-* credentials and smoke execution are gated before any real network call;
-* provider HTTP errors are mapped to safe internal categories.
+* `GIGACHAT_AUTHORIZATION_KEY` is the only supported GigaChat secret env;
+* the previous API-key alias is not supported and is treated as missing config;
+* access tokens are cached only in the provider instance and are refreshed when
+  expiry information requires it;
+* every real HTTP call uses explicit timeout and bounded retries;
+* retries are limited to transient transport, rate-limit and 5xx failures;
+* provider HTTP, transport, response and schema failures map to safe provider
+  errors with redacted context;
+* structured decisions are parsed from model text by deterministic extraction,
+  `json.loads`, `LLMDecisionPayload` validation and runtime validation;
+* provider-native function calling is not used in Stage 6.
 
 The OpenAI SDK was not added during the spike because the direct HTTP path is
 sufficient for request-shape validation and avoids an unnecessary dependency.
@@ -171,24 +180,23 @@ the provider is explicitly promoted from stretch scope.
 
 ## 6. Provider Configuration
 
-Planned environment variables:
+Current environment variables:
 
 ```env id="ipf9yf"
 LLM_PROVIDER=mock
 
 GIGACHAT_AUTHORIZATION_KEY=change_me
-GIGACHAT_API_KEY=change_me
 GIGACHAT_MODEL=GigaChat-2-Pro
 GIGACHAT_BASE_URL=https://gigachat.devices.sberbank.ru/api/v1
 GIGACHAT_AUTH_URL=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
 GIGACHAT_SCOPE=GIGACHAT_API_PERS
+GIGACHAT_TIMEOUT_SECONDS=30
+GIGACHAT_MAX_RETRIES=1
+GIGACHAT_VERIFY_SSL=true
 
 YANDEX_API_KEY=change_me
 YANDEX_FOLDER_ID=change_me
 YANDEX_MODEL=change_me
-
-LLM_TIMEOUT_SECONDS=60
-LLM_MAX_RETRIES=2
 
 ENABLE_REAL_PROVIDER_SMOKE=0
 ```
@@ -197,9 +205,9 @@ Rules:
 
 * `.env.example` may contain placeholders only;
 * real `.env` must not be committed;
-* `GIGACHAT_AUTHORIZATION_KEY` is the preferred name for the Basic
+* `GIGACHAT_AUTHORIZATION_KEY` is the only supported name for the Basic
   Authorization key used by the OAuth request;
-* `GIGACHAT_API_KEY` remains a temporary legacy alias for the same value;
+* older GigaChat secret aliases are not supported;
 * placeholder values such as `change_me` must be rejected for real provider calls;
 * provider-specific secrets must not appear in logs, audit events, screenshots or public docs.
 
@@ -227,8 +235,17 @@ reason_codes
 
 Rules:
 
-* raw text is not enough to execute tools;
-* structured payload must pass Pydantic validation;
+* raw model text is untrusted;
+* structured decision parsing uses deterministic JSON object extraction,
+  `json.loads`, `LLMDecisionPayload.model_validate(...)`, then runtime semantic
+  validation;
+* accepted provider text shapes are a single JSON object, one fenced JSON object,
+  or one balanced top-level JSON object surrounded by text;
+* zero JSON objects, multiple JSON objects, invalid JSON and non-object JSON
+  roots fail safely;
+* no fuzzy repair is allowed: no JSON5, YAML, comment stripping, trailing comma
+  repair, enum autocorrection, tool-name fuzzy matching, automatic reprompting
+  or multiple-candidate selection;
 * unknown enum values must fail validation;
 * unknown tool names must fail validation;
 * malformed arguments must fail validation;
@@ -257,16 +274,17 @@ Backend owns:
 * approval gates;
 * audit trail.
 
-Provider-native function/tool calling may be used if useful, but it must not replace backend control.
-
-Provider-native tool call output must still pass project validation before any tool is executed.
+Provider-native function/tool calling is out of Stage 6 scope. Model-suggested
+tool calls are represented only as validated structured payload proposals.
 
 Rules:
 
 * model-suggested tool calls are proposals;
 * backend decides whether a tool call is valid;
 * backend decides whether a tool call requires approval;
-* backend executes tools only through controlled tool/MCP boundary;
+* backend executes tools only through the controlled ToolRegistry boundary;
+* MCP is an optional external tool boundary, not the canonical internal
+  ToolRegistry;
 * state-changing tools must not run before policy and approval checks.
 
 ---
@@ -286,24 +304,24 @@ Safety remains backend-owned through:
 * audit trail;
 * safe error handling.
 
-Preferred implementation:
+Current positioning:
 
 ```text id="evxwna"
 LLM structured decision
 → backend validation
 → ToolRegistry
-→ MCP / MCP-like boundary
+→ optional MCP / external boundary
 → tool execution
 → audit
 ```
 
-Fallback implementation may use a FastAPI MCP-like tool server if real MCP blocks MVP delivery.
+ToolRegistry remains the canonical internal tool boundary. MCP is optional and
+external. Stage 5 access runtime is not rewritten to MCP.
 
-Fallback must still preserve explicit tool schemas, validation and audit.
-
-Stage 3 verified that the official Python `mcp` SDK v1.x resolves and imports
-under Python 3.14, and that a minimal local stdio server with one fake tool is
-feasible. This does not implement the production ToolRegistry or approval model.
+Stage 6 includes a local deterministic fake MCP boundary for
+`get_demo_system_status`. It validates typed input/output, normalizes safe MCP
+errors and is covered by offline tests. It does not connect to real IAM, HR,
+CRM, ERP, CMDB or other enterprise systems.
 
 ---
 
@@ -316,7 +334,7 @@ They must be explicit.
 Required properties:
 
 * disabled by default;
-* require environment flag;
+* require both the environment flag and the per-run `--live` flag;
 * require real non-placeholder credentials;
 * print safe summaries only;
 * avoid exposing raw provider payloads unless explicitly safe;
@@ -331,27 +349,28 @@ ENABLE_REAL_PROVIDER_SMOKE=1
 Current manual smoke entrypoints:
 
 ```text
-uv run python scripts/manual_gigachat_smoke.py
+uv run python scripts/manual_gigachat_smoke.py --live --matrix lite,pro,max
 uv run python scripts/mcp_smoke.py
 ```
 
-`scripts/manual_gigachat_smoke.py` is skipped unless `ENABLE_REAL_PROVIDER_SMOKE=1`
-is set in the project-root `.env`. It loads project-root `.env` values through
-`pydantic-settings`, rejects placeholder credentials, enables `truststore` for
-local Windows/root-certificate compatibility, and prints only safe normalized
-diagnostics.
+`scripts/manual_gigachat_smoke.py` is skipped unless both
+`ENABLE_REAL_PROVIDER_SMOKE=1` is set in the project-root `.env` and `--live` is
+passed for that run. It loads project-root `.env` values, rejects placeholder
+credentials, enables `truststore` for local Windows/root-certificate
+compatibility, and prints only safe normalized diagnostics.
 
-Current manual smoke phases:
+The GigaChat matrix checks Lite, Pro and Max model aliases and prints:
 
-1. credential/settings precheck;
-2. token acquisition;
-3. authenticated `GET /models`;
-4. simple chat completion without `response_format` and without functions;
-5. structured JSON response without functions;
-6. function-calling response without strict structured output.
+```text
+local_extract | ok/fail
+model | auth | chat | structured_decision | schema_valid | stable_enums | stable_tools | usable_for_demo | reason
+```
 
-The smoke keeps structured output and function calling separate so failures can
-be diagnosed by capability.
+The MCP smoke script is local/fake only and checks:
+
+```text
+local_boundary | fastmcp_tool | tool_discovery | tool_call | schema_validation | safe_error_mapping
+```
 
 Manual smoke should verify:
 
@@ -400,6 +419,27 @@ PROVIDER_RATE_LIMIT
 PROVIDER_INVALID_RESPONSE
 PROVIDER_UNAVAILABLE
 LLM_OUTPUT_VALIDATION_ERROR
+```
+
+Stage 6 provider errors include:
+
+```text
+ProviderConfigurationError
+ProviderAuthenticationError
+ProviderTransportError
+ProviderRateLimitError
+ProviderResponseError
+ProviderSchemaValidationError
+ProviderModelUnavailableError
+```
+
+Provider errors expose safe context only:
+
+```text
+safe_message
+reason_code
+provider_name
+model_name
 ```
 
 Rules:

@@ -2,7 +2,10 @@
 
 This document maps the current and planned architecture for `enterprise-ai-tool-gateway`.
 
-Current status: Stage 5 access request reference workflow implemented on top of the Stage 4 core gateway foundation. The project remains a backend-first MVP; API routes, Web UI, production integrations, auth, workers and migrations are not implemented yet.
+Current status: Stage 6 GigaChat and MCP boundary hardening is implemented on
+top of the Stage 5 access request reference workflow. The project remains a
+backend-first MVP; API routes, Web UI, production integrations, auth, workers
+and migrations are not implemented yet.
 
 ## 1. Current Package Map
 
@@ -11,8 +14,8 @@ Implemented source packages under `src/enterprise_ai_tool_gateway/`:
 | Package | Status | Ownership |
 | ------- | ------ | --------- |
 | `contracts/` | implemented | Shared enums and Pydantic create/read contracts used by foundation layers. |
-| `llm/` | Stage 3 spike | Provider port, deterministic mock provider, GigaChat/Yandex settings and smoke helpers. |
-| `mcp/` | Stage 3 spike | Minimal local MCP feasibility smoke only; not the production tool boundary. |
+| `llm/` | implemented | Provider boundary, deterministic mock provider, optional/manual GigaChat config/auth/transport, safe provider errors and strict structured decision parsing. |
+| `mcp/` | implemented | Optional local fake external tool boundary with typed validation, safe MCP errors and manual smoke; ToolRegistry remains the canonical internal tool boundary. |
 | `workflow/` | implemented | Pure event-driven `AgentRun` state kernel and transition allowlist. |
 | `tools/` | implemented | Generic `ToolDefinition`, `ToolRegistry` and `ToolExecutor` boundary with Pydantic input/output validation. |
 | `policy/` | implemented | Generic policy request/decision primitives and default Stage 4 tool-policy evaluator. |
@@ -59,7 +62,14 @@ Sibling foundation layers do not coordinate each other directly. For example, `w
 
 `db/` persists already validated facts. `GatewayRepository.update_agent_run_status()` stores a status chosen by another layer and intentionally does not validate workflow transitions.
 
-`llm/` remains a provider boundary. LLM output is untrusted until backend validation accepts it, and providers must not execute tools.
+`llm/` owns provider-specific configuration, transport, auth, safe provider
+errors and deterministic structured decision parsing. LLM output is untrusted
+until extracted, parsed, validated through `LLMDecisionPayload`, and accepted by
+backend runtime validation. Providers must not execute tools or approve actions.
+
+`mcp/` owns the optional external tool boundary. It currently exposes only a
+local deterministic fake MCP tool for boundary validation. It is not the
+canonical internal tool boundary and it does not replace ToolRegistry.
 
 `access/` owns access-domain schemas and tool definitions only. It does not own workflow, policy, approval, audit, persistence, LLM provider behavior or HTTP routing.
 
@@ -84,16 +94,20 @@ uv run pyright
 git diff --check
 ```
 
-Manual spike utilities currently exist for provider/MCP checks, but real-provider smoke remains explicit and disabled by default:
+Manual utilities exist for provider/MCP checks, but real-provider smoke remains
+explicit and disabled by default:
 
 ```bash
 uv run python scripts/mcp_smoke.py
-uv run python scripts/manual_gigachat_smoke.py
+uv run python scripts/manual_gigachat_smoke.py --live --matrix lite,pro,max
 ```
 
 ## 5. Current Non-Entrypoints
 
-There is currently no production FastAPI route layer, approval UI/API, production MCP lifecycle, Alembic migration setup, background worker, real enterprise integration or production auth layer.
+There is currently no production FastAPI route layer, approval UI/API,
+production MCP lifecycle, Alembic migration setup, background worker, real
+enterprise integration or production auth layer. Stage 5 access runtime is not
+rewritten to MCP.
 
 ## 6. Tests
 
@@ -106,5 +120,6 @@ Current tests are deterministic and offline by default. Stage 4 coverage include
 * approval primitives;
 * audit redaction/event creation;
 * async SQLite persistence foundation;
-* existing provider and MCP spike behavior;
+* provider and structured-output boundary behavior;
+* local fake MCP boundary behavior;
 * Stage 5 access tools, access workflow runtime, approval resolution path, approval-mode persistence and Stage 5 import boundaries.

@@ -45,10 +45,32 @@ Allowed manual utilities include:
 
 ```bash
 uv run python scripts/mcp_smoke.py
-uv run python scripts/manual_gigachat_smoke.py
+uv run python scripts/manual_gigachat_smoke.py --live --matrix lite,pro,max
 ```
 
-Real provider smoke must be disabled by default, require an explicit opt-in flag, reject placeholder credentials, and print safe summaries only.
+Real provider smoke must be disabled by default, require both an explicit
+environment opt-in flag and the per-run `--live` flag, reject placeholder
+credentials, and print safe summaries only.
+
+GigaChat manual smoke uses:
+
+```env
+ENABLE_REAL_PROVIDER_SMOKE=1
+GIGACHAT_AUTHORIZATION_KEY=change_me
+GIGACHAT_MODEL=GigaChat-2-Pro
+GIGACHAT_TIMEOUT_SECONDS=30
+GIGACHAT_MAX_RETRIES=1
+GIGACHAT_VERIFY_SSL=true
+```
+
+Only `GIGACHAT_AUTHORIZATION_KEY` is supported for the GigaChat secret. Older
+GigaChat secret aliases are not supported.
+
+The GigaChat smoke matrix may check Lite, Pro and Max model aliases. Treat
+matrix results as manual diagnostics, not deterministic acceptance tests.
+
+The MCP smoke must stay local/fake only and must not call real enterprise
+systems.
 
 ## 4. Stage 4 Foundation Awareness
 
@@ -67,7 +89,13 @@ db/
 Do not bypass these boundaries when adding later stages:
 
 * LLM output is untrusted until backend validation accepts it.
+* Provider text must pass deterministic JSON extraction, `json.loads`,
+  `LLMDecisionPayload` validation and runtime semantic validation.
+* Do not use fuzzy JSON repair, provider-native function calling or real
+  provider calls in default pytest.
 * Tools execute only through the controlled tool boundary.
+* ToolRegistry remains the canonical internal tool boundary; MCP is optional and
+  external.
 * State-changing tools require policy checks.
 * Risky state-changing tools require approval.
 * Audit events must not contain secrets.

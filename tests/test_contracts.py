@@ -313,7 +313,7 @@ async def test_existing_mock_provider_uses_shared_decision_contract() -> None:
     payload = LLMDecisionPayload.model_validate(decision.model_dump())
 
     assert decision.request_type == RequestType.ACCESS_REQUEST
-    assert decision.domain_template == "ACCESS_REQUEST"
+    assert decision.domain_template is DomainTemplate.ACCESS
     assert payload.request_type is RequestType.ACCESS_REQUEST
     assert payload.domain_template is DomainTemplate.ACCESS
     assert isinstance(decision.proposed_tool_calls[0], ProposedToolCall)

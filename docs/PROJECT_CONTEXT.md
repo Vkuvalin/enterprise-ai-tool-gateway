@@ -6,9 +6,11 @@
 
 ## 2. Current status
 
-MVP development after Stage 4.
+MVP development after Stage 6.
 
 Stage 4 — Core Gateway Foundation is implemented and accepted.
+Stage 5 — Access Request Reference Workflow is implemented.
+Stage 6 — GigaChat & MCP Hardening is implemented.
 
 Implemented foundation packages:
 
@@ -20,9 +22,15 @@ policy/
 approval/
 audit/
 db/
+llm/
+mcp/
+access/
+application/
 ```
 
-Business workflows, API routes, Web UI, production integrations, auth, workers and migrations are not implemented yet.
+The access request reference workflow and provider/MCP hardening are
+implemented. API routes, Web UI, production integrations, auth, workers and
+migrations are not implemented yet.
 
 ## 3. Purpose
 

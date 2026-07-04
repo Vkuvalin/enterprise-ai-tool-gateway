@@ -19,8 +19,10 @@ from enterprise_ai_tool_gateway.contracts import (
     ApprovalStatus,
     AuditEventType,
     AuditEventRead,
+    DomainTemplate,
     PolicyDecisionStatus,
     ProposedToolCall,
+    RequestType,
     RiskLevel,
     ToolCallStatus,
 )
@@ -366,10 +368,10 @@ class UnknownToolProvider:
     ) -> LLMDecisionResponse:
         _ = request
         return LLMDecisionResponse(
-            request_type="ACCESS_REQUEST",
-            domain_template="ACCESS",
+            request_type=RequestType.ACCESS_REQUEST,
+            domain_template=DomainTemplate.ACCESS,
             confidence=0.95,
-            risk_level="MEDIUM",
+            risk_level=RiskLevel.MEDIUM,
             requires_approval=True,
             missing_fields=[],
             proposed_tool_calls=[
