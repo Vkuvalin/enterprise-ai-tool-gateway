@@ -2,10 +2,10 @@
 
 This document maps the current and planned architecture for `enterprise-ai-tool-gateway`.
 
-Current status: Stage 6 GigaChat and MCP boundary hardening is implemented on
-top of the Stage 5 access request reference workflow. The project remains a
-backend-first MVP; API routes, Web UI, production integrations, auth, workers
-and migrations are not implemented yet.
+Current status: Stage 7 demo template expansion is implemented on top of the
+Stage 6 provider and MCP boundary hardening. The project remains a backend-first
+MVP; API routes, Web UI, production integrations, auth, workers and migrations
+are not implemented yet.
 
 ## 1. Current Package Map
 
@@ -23,8 +23,10 @@ Implemented source packages under `src/enterprise_ai_tool_gateway/`:
 | `audit/` | implemented | Redacted audit event creation and recursive payload redaction. |
 | `db/` | implemented | Minimal async SQLAlchemy + SQLite models, schema bootstrap, session helpers and repository. |
 | `access/` | implemented | Access-specific schemas, deterministic tool definitions and handlers for the Stage 5 reference workflow. |
-| `demo_domain/` | implemented | Deterministic synthetic access data representing future HR/catalog/policy/ticket sources. |
-| `application/` | implemented | Access workflow runtime coordinator that connects provider, workflow, tools, policy, approval, audit and persistence boundaries. |
+| `procurement/` | implemented | Procurement demo schemas, deterministic tool definitions and handlers for the Stage 7 thin procurement template. |
+| `maintenance_lite/` | implemented | Maintenance-lite demo schemas, deterministic tool definitions and handlers for the Stage 7 thin maintenance template. |
+| `demo_domain/` | implemented | Deterministic synthetic access, procurement and maintenance data representing future external sources without real connectors. |
+| `application/` | implemented | Explicit runtime coordinators for access, procurement and maintenance_lite workflows, plus shared mechanical demo workflow helpers. |
 
 Planned later packages remain subject to their own Stage Briefs:
 
@@ -73,9 +75,19 @@ canonical internal tool boundary and it does not replace ToolRegistry.
 
 `access/` owns access-domain schemas and tool definitions only. It does not own workflow, policy, approval, audit, persistence, LLM provider behavior or HTTP routing.
 
-`demo_domain/` owns local deterministic synthetic access data only. It represents future external sources without implementing real connectors.
+`procurement/` owns procurement-domain schemas and deterministic tool definitions only. It does not own workflow, policy, approval, audit, persistence, LLM provider behavior, MCP behavior, real procurement connectors or HTTP routing.
+
+`maintenance_lite/` owns maintenance-domain schemas and deterministic tool definitions only. It does not own workflow, policy, approval, audit, persistence, LLM provider behavior, MCP behavior, real maintenance / ТОИР / CMMS connectors or HTTP routing.
+
+`demo_domain/` owns local deterministic synthetic access, procurement and maintenance data only. It represents future external sources without implementing real connectors.
 
 `application/` coordinates use cases. The Stage 5 access runtime starts and resumes `ACCESS_REQUEST` workflows, uses the provider boundary for structured decisions, validates backend-owned tool plans, executes access tools through `ToolExecutor`, evaluates policy, creates approvals when needed, persists repository records, and writes redacted audit events.
+
+The Stage 7 procurement runtime coordinates `PROCUREMENT_REQUEST` with synthetic requester/vendor/catalog/budget/duplicate read tools, existing policy/approval/audit foundations, and draft-only purchase request creation persisted through `ToolCall.output_payload`.
+
+The Stage 7 maintenance_lite runtime coordinates `MAINTENANCE_REQUEST` with synthetic requester/asset/severity/duplicate read tools, existing policy/approval/audit foundations, and draft-only work order creation persisted through `ToolCall.output_payload`.
+
+`application/demo_workflow.py` owns shared runtime mechanics only, such as required-field checks, provider tool-name validation, safe tool execution and persistence, audit persistence, policy request construction, approval record handling and runtime record collection. It does not encode procurement or maintenance domain semantics.
 
 ## 4. Current Entrypoints
 
@@ -107,7 +119,10 @@ uv run python scripts/manual_gigachat_smoke.py --live --matrix lite,pro,max
 There is currently no production FastAPI route layer, approval UI/API,
 production MCP lifecycle, Alembic migration setup, background worker, real
 enterprise integration or production auth layer. Stage 5 access runtime is not
-rewritten to MCP.
+rewritten to MCP. Stage 7 procurement and maintenance templates add no real
+procurement or maintenance connectors, no domain DB tables, and no real purchase
+order or work order lifecycle. Their controlled actions create synthetic drafts
+only.
 
 ## 6. Tests
 
@@ -122,4 +137,6 @@ Current tests are deterministic and offline by default. Stage 4 coverage include
 * async SQLite persistence foundation;
 * provider and structured-output boundary behavior;
 * local fake MCP boundary behavior;
-* Stage 5 access tools, access workflow runtime, approval resolution path, approval-mode persistence and Stage 5 import boundaries.
+* Stage 5 access tools, access workflow runtime, approval resolution path, approval-mode persistence and Stage 5 import boundaries;
+* Stage 7 procurement and maintenance_lite tools, runtime paths, approval paths, missing input, manual review, rejection, unknown tool proposal handling, audit/persistence checks and import boundaries;
+* shared Stage 7 demo workflow helper mechanics.

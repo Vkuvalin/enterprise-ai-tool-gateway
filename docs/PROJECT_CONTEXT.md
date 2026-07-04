@@ -6,11 +6,12 @@
 
 ## 2. Current status
 
-MVP development after Stage 6.
+MVP development after Stage 7.
 
 Stage 4 — Core Gateway Foundation is implemented and accepted.
 Stage 5 — Access Request Reference Workflow is implemented.
 Stage 6 — GigaChat & MCP Hardening is implemented.
+Stage 7 — Demo Template Expansion is implemented.
 
 Implemented foundation packages:
 
@@ -25,12 +26,16 @@ db/
 llm/
 mcp/
 access/
+procurement/
+maintenance_lite/
+demo_domain/
 application/
 ```
 
 The access request reference workflow and provider/MCP hardening are
-implemented. API routes, Web UI, production integrations, auth, workers and
-migrations are not implemented yet.
+implemented. Thin synthetic procurement and maintenance_lite demo templates are
+implemented to demonstrate the repeatable gateway pattern. API routes, Web UI,
+production integrations, auth, workers and migrations are not implemented yet.
 
 ## 3. Purpose
 
@@ -99,10 +104,17 @@ Accepted request templates:
 | Request type          | Status                    | Purpose                |
 | --------------------- | ------------------------- | ---------------------- |
 | `ACCESS_REQUEST`      | required full             | reference workflow     |
-| `PROCUREMENT_REQUEST` | required-lite             | second domain template |
-| `MAINTENANCE_REQUEST` | required-lite / TOIR-lite | third domain template  |
+| `PROCUREMENT_REQUEST` | required-lite implemented | second domain template |
+| `MAINTENANCE_REQUEST` | required-lite implemented | third domain template  |
 | `POLICY_INQUIRY`      | cross-cutting             | read-only policy mode  |
 | `UNKNOWN`             | required                  | safe fallback          |
+
+Stage 7 procurement and maintenance_lite support is synthetic and draft-only.
+It uses deterministic local data, existing gateway persistence tables, existing
+policy/approval/audit foundations and controlled draft actions stored through
+`ToolCall.output_payload`. It does not add real procurement connectors,
+maintenance / ТОИР connectors, ERP/1C/CMMS integrations, domain DB tables or
+production workflow depth.
 
 ## 7. Important boundaries
 

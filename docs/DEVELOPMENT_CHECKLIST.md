@@ -37,6 +37,20 @@ Default tests must not require:
 
 Use deterministic mocks, fake transports, local in-memory storage, or local smoke utilities where appropriate.
 
+Stage 7 procurement and maintenance_lite tests must remain offline and
+deterministic. They must not call real procurement, ERP, 1C, CMMS, EAM, TOIR,
+vendor, asset, budget, work-order or provider systems. New demo template tests
+should cover:
+
+* completed path;
+* approval path;
+* missing input;
+* manual review;
+* rejected path;
+* unknown tool proposal;
+* audit and persistence records;
+* draft output stored through `ToolCall.output_payload`.
+
 ## 3. Manual Smoke Boundary
 
 Real provider and MCP smoke checks are manual/explicit only.
@@ -100,6 +114,8 @@ Do not bypass these boundaries when adding later stages:
 * Risky state-changing tools require approval.
 * Audit events must not contain secrets.
 * DB persistence stores already validated facts and must not own workflow or policy decisions.
+* Stage 7 procurement and maintenance_lite controlled actions are synthetic
+  draft-only actions and must not add domain DB tables or real connectors.
 
 ## 5. Source-of-Truth Docs
 
