@@ -2,10 +2,11 @@
 
 This document maps the current and planned architecture for `enterprise-ai-tool-gateway`.
 
-Current status: Stage 7 demo template expansion is implemented on top of the
-Stage 6 provider and MCP boundary hardening. The project remains a backend-first
-MVP; API routes, Web UI, production integrations, auth, workers and migrations
-are not implemented yet.
+Current status: Stage 8 backend API and deterministic acceptance eval surface is
+implemented on top of the Stage 7 demo template expansion and Stage 6 provider
+and MCP boundary hardening. The project remains a backend-first MVP; the API is
+a local/demo adapter surface, not a production platform. Web UI, production
+integrations, auth, workers and migrations are not implemented.
 
 ## 1. Current Package Map
 
@@ -27,14 +28,16 @@ Implemented source packages under `src/enterprise_ai_tool_gateway/`:
 | `maintenance_lite/` | implemented | Maintenance-lite demo schemas, deterministic tool definitions and handlers for the Stage 7 thin maintenance template. |
 | `demo_domain/` | implemented | Deterministic synthetic access, procurement and maintenance data representing future external sources without real connectors. |
 | `application/` | implemented | Explicit runtime coordinators for access, procurement and maintenance_lite workflows, plus shared mechanical demo workflow helpers. |
+| `api/http/` | implemented | FastAPI inbound adapter with `/api/v1` health, capabilities, submit, approval resolve and run read endpoints. Routes are thin and do not own workflow, policy, approval, tool execution or audit logic. |
+| `api/http/schemas/` | implemented | API-facing DTOs for submit requests, workflow responses, capabilities, approvals, runs, tool calls and audit events. |
+| `api/http/mappers.py` | implemented | Mapping between API DTOs, application DTOs and serialized API response DTOs. |
+| `api/http/dependencies.py` | implemented | Request-scoped DB session, repository and runtime dependency wiring using deterministic mock/fake providers by default. |
+| `evals/` | implemented | Deterministic API-level acceptance case definitions, runner logic and JSON/text result models. |
 
 Planned later packages remain subject to their own Stage Briefs:
 
 ```text
-api/http
-evals
 web/static
-scripts
 ```
 
 ## 2. Dependency Direction
@@ -89,12 +92,35 @@ The Stage 7 maintenance_lite runtime coordinates `MAINTENANCE_REQUEST` with synt
 
 `application/demo_workflow.py` owns shared runtime mechanics only, such as required-field checks, provider tool-name validation, safe tool execution and persistence, audit persistence, policy request construction, approval record handling and runtime record collection. It does not encode procurement or maintenance domain semantics.
 
+`api/http/` owns the local/demo FastAPI adapter layer. It translates HTTP
+requests into application DTOs and serializes application/runtime results back
+to API DTOs. API routes must stay thin: no business logic, no policy decisions,
+no approval state mutation, no tool execution and no audit decision creation in
+route handlers. Stage 8 does not add production auth, tenant isolation or RBAC.
+
+`evals/` owns deterministic acceptance checks that exercise the API surface
+through FastAPI's in-process test client. Evals use mock/fake providers only and
+do not benchmark models, compare providers or call real external services.
+
 ## 4. Current Entrypoints
 
 Current deterministic test entrypoint:
 
 ```bash
 uv run pytest
+```
+
+Current local/demo API entrypoint:
+
+```bash
+uv run uvicorn enterprise_ai_tool_gateway.api.http.app:app --reload
+```
+
+Current deterministic API acceptance eval entrypoints:
+
+```bash
+uv run python scripts/run_eval.py
+uv run python scripts/run_eval.py --format json
 ```
 
 Current validation commands:
@@ -116,13 +142,15 @@ uv run python scripts/manual_gigachat_smoke.py --live --matrix lite,pro,max
 
 ## 5. Current Non-Entrypoints
 
-There is currently no production FastAPI route layer, approval UI/API,
-production MCP lifecycle, Alembic migration setup, background worker, real
-enterprise integration or production auth layer. Stage 5 access runtime is not
-rewritten to MCP. Stage 7 procurement and maintenance templates add no real
-procurement or maintenance connectors, no domain DB tables, and no real purchase
-order or work order lifecycle. Their controlled actions create synthetic drafts
-only.
+There is currently no production FastAPI route layer, approval UI, production
+MCP lifecycle, Alembic migration setup, background worker, real enterprise
+integration or production auth layer. The Stage 8 API is local/demo only and
+does not implement authenticated users, tenants, RBAC, provider selection,
+domain CRUD, run listing/search/history or real connectors. Stage 5 access
+runtime is not rewritten to MCP. Stage 7 procurement and maintenance templates
+add no real procurement or maintenance connectors, no domain DB tables, and no
+real purchase order or work order lifecycle. Their controlled actions create
+synthetic drafts only.
 
 ## 6. Tests
 
@@ -139,4 +167,6 @@ Current tests are deterministic and offline by default. Stage 4 coverage include
 * local fake MCP boundary behavior;
 * Stage 5 access tools, access workflow runtime, approval resolution path, approval-mode persistence and Stage 5 import boundaries;
 * Stage 7 procurement and maintenance_lite tools, runtime paths, approval paths, missing input, manual review, rejection, unknown tool proposal handling, audit/persistence checks and import boundaries;
-* shared Stage 7 demo workflow helper mechanics.
+* shared Stage 7 demo workflow helper mechanics;
+* Stage 8 local/demo API health, capabilities, workflow submit, approval resolve and run read endpoints;
+* Stage 8 deterministic API-level acceptance eval runner and 21-case acceptance matrix.

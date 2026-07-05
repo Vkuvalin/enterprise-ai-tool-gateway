@@ -13,6 +13,8 @@ uv run pytest
 uv run ruff check .
 uv run pyright
 git diff --check
+uv run python scripts/run_eval.py
+uv run python scripts/run_eval.py --format json
 ```
 
 Before commit, also inspect:
@@ -50,6 +52,12 @@ should cover:
 * unknown tool proposal;
 * audit and persistence records;
 * draft output stored through `ToolCall.output_payload`.
+
+Stage 8 API and eval tests must remain offline and deterministic. API tests
+must use local test clients, temporary SQLite storage and deterministic
+mock/fake providers only. The eval runner must exercise `/api/v1` endpoints,
+not application runtimes directly, and `scripts/run_eval.py` must pass before
+Stage 8 acceptance is considered complete.
 
 ## 3. Manual Smoke Boundary
 
@@ -116,6 +124,11 @@ Do not bypass these boundaries when adding later stages:
 * DB persistence stores already validated facts and must not own workflow or policy decisions.
 * Stage 7 procurement and maintenance_lite controlled actions are synthetic
   draft-only actions and must not add domain DB tables or real connectors.
+* Stage 8 API routes are inbound adapters only. Application runtimes own
+  workflow orchestration; routes must not own policy, approval, tool execution,
+  workflow transition or audit logic.
+* Stage 8 evals are deterministic acceptance checks, not model benchmarks,
+  prompt optimization, provider comparison or production observability.
 
 ## 5. Source-of-Truth Docs
 

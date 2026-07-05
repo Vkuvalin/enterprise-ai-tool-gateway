@@ -6,12 +6,13 @@
 
 ## 2. Current status
 
-MVP development after Stage 7.
+MVP development after Stage 8.
 
 Stage 4 — Core Gateway Foundation is implemented and accepted.
 Stage 5 — Access Request Reference Workflow is implemented.
 Stage 6 — GigaChat & MCP Hardening is implemented.
 Stage 7 — Demo Template Expansion is implemented.
+Stage 8 — Backend API, Evals & Acceptance Surface is implemented.
 
 Implemented foundation packages:
 
@@ -30,12 +31,16 @@ procurement/
 maintenance_lite/
 demo_domain/
 application/
+api/http/
+evals/
 ```
 
 The access request reference workflow and provider/MCP hardening are
 implemented. Thin synthetic procurement and maintenance_lite demo templates are
-implemented to demonstrate the repeatable gateway pattern. API routes, Web UI,
-production integrations, auth, workers and migrations are not implemented yet.
+implemented to demonstrate the repeatable gateway pattern. A local/demo FastAPI
+adapter and deterministic API-level acceptance evals are implemented for access,
+procurement and maintenance_lite workflows. Web UI, production integrations,
+auth, workers and migrations are not implemented.
 
 ## 3. Purpose
 
@@ -116,6 +121,12 @@ policy/approval/audit foundations and controlled draft actions stored through
 maintenance / ТОИР connectors, ERP/1C/CMMS integrations, domain DB tables or
 production workflow depth.
 
+Stage 8 adds a local/demo backend API and deterministic acceptance eval surface
+for the access, procurement and maintenance_lite workflows. The API is an
+inbound adapter over application runtimes and persistence; it does not add
+production auth, tenant isolation, RBAC, provider selection or real enterprise
+connectors.
+
 ## 7. Important boundaries
 
 The project must stay inside MVP №1 boundaries.
@@ -186,7 +197,7 @@ Regardless of implementation path:
 
 Backend priority is 100%.
 
-The project must be demonstrable through API first.
+The project is demonstrable through the local/demo backend API first.
 
 Web UI should be implemented only after backend acceptance.
 

@@ -4,8 +4,10 @@ import argparse
 import importlib.util
 import json
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import ModuleType
 from typing import Any, cast
 
@@ -98,6 +100,14 @@ def _provider(
 
 def _enabled_env_file() -> str:
     return "tests/fixtures/nonexistent-real-provider-smoke.env"
+
+
+@contextmanager
+def _temporary_env_file(content: str) -> Iterator[Path]:
+    with TemporaryDirectory(prefix="gigachat-provider-test-") as temp_dir:
+        env_file = Path(temp_dir) / ".env"
+        env_file.write_text(content, encoding="utf-8")
+        yield env_file
 
 
 def test_config_from_explicit_values_builds_safe_request_shapes() -> None:
@@ -310,9 +320,7 @@ async def test_auth_success_with_fake_transport() -> None:
 
 
 @pytest.mark.asyncio
-async def test_token_is_cached_in_provider_instance(tmp_path) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text("ENABLE_REAL_PROVIDER_SMOKE=1", encoding="utf-8")
+async def test_token_is_cached_in_provider_instance() -> None:
     calls: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -321,23 +329,22 @@ async def test_token_is_cached_in_provider_instance(tmp_path) -> None:
             return httpx.Response(200, json={"access_token": "token", "expires_in": 3600})
         return _chat_response(_decision_json())
 
-    provider = GigaChatProvider(
-        config=_config(),
-        env_file=env_file,
-        transport=httpx.MockTransport(handler),
-        sleep=_no_sleep,
-    )
+    with _temporary_env_file("ENABLE_REAL_PROVIDER_SMOKE=1") as env_file:
+        provider = GigaChatProvider(
+            config=_config(),
+            env_file=env_file,
+            transport=httpx.MockTransport(handler),
+            sleep=_no_sleep,
+        )
 
-    await provider.generate_structured_decision(LLMDecisionRequest(user_request="one"))
-    await provider.generate_structured_decision(LLMDecisionRequest(user_request="two"))
+        await provider.generate_structured_decision(LLMDecisionRequest(user_request="one"))
+        await provider.generate_structured_decision(LLMDecisionRequest(user_request="two"))
 
     assert calls.count("/api/v2/oauth") == 1
 
 
 @pytest.mark.asyncio
-async def test_expired_token_refreshes(tmp_path) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text("ENABLE_REAL_PROVIDER_SMOKE=1", encoding="utf-8")
+async def test_expired_token_refreshes() -> None:
     auth_count = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -347,15 +354,16 @@ async def test_expired_token_refreshes(tmp_path) -> None:
             return httpx.Response(200, json={"access_token": f"token-{auth_count}", "expires_in": 1})
         return _chat_response(_decision_json())
 
-    provider = GigaChatProvider(
-        config=_config(),
-        env_file=env_file,
-        transport=httpx.MockTransport(handler),
-        sleep=_no_sleep,
-    )
+    with _temporary_env_file("ENABLE_REAL_PROVIDER_SMOKE=1") as env_file:
+        provider = GigaChatProvider(
+            config=_config(),
+            env_file=env_file,
+            transport=httpx.MockTransport(handler),
+            sleep=_no_sleep,
+        )
 
-    await provider.generate_structured_decision(LLMDecisionRequest(user_request="one"))
-    await provider.generate_structured_decision(LLMDecisionRequest(user_request="two"))
+        await provider.generate_structured_decision(LLMDecisionRequest(user_request="one"))
+        await provider.generate_structured_decision(LLMDecisionRequest(user_request="two"))
 
     assert auth_count == 2
 
@@ -457,9 +465,7 @@ async def test_http_5xx_retries_with_bound() -> None:
 
 
 @pytest.mark.asyncio
-async def test_metadata_records_retry_count_and_duration(tmp_path) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text("ENABLE_REAL_PROVIDER_SMOKE=1", encoding="utf-8")
+async def test_metadata_records_retry_count_and_duration() -> None:
     chat_calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -471,19 +477,20 @@ async def test_metadata_records_retry_count_and_duration(tmp_path) -> None:
             return httpx.Response(500, text="transient")
         return _chat_response(_decision_json())
 
-    provider = GigaChatProvider(
-        config=_config(max_retries=1),
-        env_file=env_file,
-        transport=httpx.MockTransport(handler),
-        sleep=_no_sleep,
-    )
+    with _temporary_env_file("ENABLE_REAL_PROVIDER_SMOKE=1") as env_file:
+        provider = GigaChatProvider(
+            config=_config(max_retries=1),
+            env_file=env_file,
+            transport=httpx.MockTransport(handler),
+            sleep=_no_sleep,
+        )
 
-    await provider.generate_structured_decision(LLMDecisionRequest(user_request="Need access."))
+        await provider.generate_structured_decision(LLMDecisionRequest(user_request="Need access."))
 
-    assert provider.last_metadata is not None
-    assert provider.last_metadata.retry_count == 1
-    assert provider.last_metadata.duration_ms >= 0
-    assert provider.last_metadata.structured_output_valid is True
+        assert provider.last_metadata is not None
+        assert provider.last_metadata.retry_count == 1
+        assert provider.last_metadata.duration_ms >= 0
+        assert provider.last_metadata.structured_output_valid is True
 
 
 def test_parse_structured_decision_response_rejects_malformed_chat_shape() -> None:
@@ -532,21 +539,18 @@ def test_default_base_url_is_stable_for_manual_provider() -> None:
 
 @pytest.mark.asyncio
 async def test_manual_gigachat_smoke_without_live_skips_even_when_env_flag_is_set(
-    tmp_path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text("ENABLE_REAL_PROVIDER_SMOKE=1\n", encoding="utf-8")
-
     def fail_from_env(*_args: object, **_kwargs: object) -> GigaChatProviderConfig:
         raise AssertionError("live provider config should not be loaded without --live")
 
     monkeypatch.setattr(manual_gigachat_smoke.GigaChatProviderConfig, "from_env", fail_from_env)
 
-    status = await manual_gigachat_smoke._run(
-        argparse.Namespace(env_file=str(env_file), matrix="lite", live=False)
-    )
+    with _temporary_env_file("ENABLE_REAL_PROVIDER_SMOKE=1\n") as env_file:
+        status = await manual_gigachat_smoke._run(
+            argparse.Namespace(env_file=str(env_file), matrix="lite", live=False)
+        )
 
     output = capsys.readouterr().out
     assert status == 0
@@ -555,21 +559,18 @@ async def test_manual_gigachat_smoke_without_live_skips_even_when_env_flag_is_se
 
 @pytest.mark.asyncio
 async def test_manual_gigachat_smoke_with_live_but_without_env_flag_skips(
-    tmp_path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text("", encoding="utf-8")
-
     def fail_from_env(*_args: object, **_kwargs: object) -> GigaChatProviderConfig:
         raise AssertionError("live provider config should not be loaded without env flag")
 
     monkeypatch.setattr(manual_gigachat_smoke.GigaChatProviderConfig, "from_env", fail_from_env)
 
-    status = await manual_gigachat_smoke._run(
-        argparse.Namespace(env_file=str(env_file), matrix="lite", live=True)
-    )
+    with _temporary_env_file("") as env_file:
+        status = await manual_gigachat_smoke._run(
+            argparse.Namespace(env_file=str(env_file), matrix="lite", live=True)
+        )
 
     output = capsys.readouterr().out
     assert status == 0
