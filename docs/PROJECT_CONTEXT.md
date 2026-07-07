@@ -6,13 +6,14 @@
 
 ## 2. Current status
 
-MVP development after Stage 8.
+MVP development after Stage 9.
 
 Stage 4 — Core Gateway Foundation is implemented and accepted.
 Stage 5 — Access Request Reference Workflow is implemented.
 Stage 6 — GigaChat & MCP Hardening is implemented.
 Stage 7 — Demo Template Expansion is implemented.
 Stage 8 — Backend API, Evals & Acceptance Surface is implemented.
+Stage 9 — Modular Web Client Surface is implemented.
 
 Implemented foundation packages:
 
@@ -35,12 +36,19 @@ api/http/
 evals/
 ```
 
+Implemented root-level frontend package:
+
+```text
+frontend/
+```
+
 The access request reference workflow and provider/MCP hardening are
 implemented. Thin synthetic procurement and maintenance_lite demo templates are
 implemented to demonstrate the repeatable gateway pattern. A local/demo FastAPI
 adapter and deterministic API-level acceptance evals are implemented for access,
-procurement and maintenance_lite workflows. Web UI, production integrations,
-auth, workers and migrations are not implemented.
+procurement and maintenance_lite workflows. Stage 9 adds a local/demo modular
+web client over the Stage 8 FastAPI API. Production integrations, auth, workers,
+deployment and migrations are not implemented.
 
 ## 3. Purpose
 
@@ -96,7 +104,7 @@ Accepted MVP scope:
 * persisted audit trail;
 * eval scenarios;
 * API-first demo;
-* Web UI after backend acceptance.
+* local/demo web UI over `/api/v1`.
 
 ## 6. Demo surface
 
@@ -126,6 +134,12 @@ for the access, procurement and maintenance_lite workflows. The API is an
 inbound adapter over application runtimes and persistence; it does not add
 production auth, tenant isolation, RBAC, provider selection or real enterprise
 connectors.
+
+Stage 9 adds an independent React/Vite local/demo web client under `frontend/`.
+The UI demonstrates workflow submission, run lifecycle, approvals, tool calls
+and audit trail through FastAPI `/api/v1`. `frontend/src/api/` owns the HTTP
+client boundary. The frontend does not import backend internals, does not own
+workflow logic and stores only local known run IDs in browser storage.
 
 ## 7. Important boundaries
 
@@ -197,11 +211,10 @@ Regardless of implementation path:
 
 Backend priority is 100%.
 
-The project is demonstrable through the local/demo backend API first.
+The project is demonstrable through the local/demo backend API first, and Stage
+9 adds a local/demo independent web client over that API.
 
-Web UI should be implemented only after backend acceptance.
-
-If implemented, UI must show:
+The UI shows:
 
 * request input;
 * run status;
@@ -209,7 +222,7 @@ If implemented, UI must show:
 * tool call timeline;
 * approval panel;
 * audit timeline;
-* eval summary.
+* API capabilities/status.
 
 UI must not own business logic.
 

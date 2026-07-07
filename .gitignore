@@ -10,7 +10,8 @@ docs/codex/
 !.env.example
 
 # Runtime data
-data/
+# Root runtime/local data only; frontend source folders may also be named data.
+/data/
 *.db
 *.sqlite
 *.sqlite3
@@ -31,6 +32,11 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 
 # IDE / OS
 .vscode/

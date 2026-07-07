@@ -15,6 +15,10 @@ uv run pyright
 git diff --check
 uv run python scripts/run_eval.py
 uv run python scripts/run_eval.py --format json
+cd frontend
+npm install
+npm run typecheck
+npm run build
 ```
 
 Before commit, also inspect:
@@ -58,6 +62,11 @@ must use local test clients, temporary SQLite storage and deterministic
 mock/fake providers only. The eval runner must exercise `/api/v1` endpoints,
 not application runtimes directly, and `scripts/run_eval.py` must pass before
 Stage 8 acceptance is considered complete.
+
+Stage 9 frontend validation must remain local/demo and must not call real
+provider or enterprise network paths directly. The frontend talks only to
+FastAPI `/api/v1` through `frontend/src/api/`, and browser localStorage may
+store run IDs only.
 
 ## 3. Manual Smoke Boundary
 
@@ -129,6 +138,11 @@ Do not bypass these boundaries when adding later stages:
   workflow transition or audit logic.
 * Stage 8 evals are deterministic acceptance checks, not model benchmarks,
   prompt optimization, provider comparison or production observability.
+* Stage 9 frontend is an independent React/Vite client under `frontend/`.
+  `frontend/src/api/` owns HTTP calls to `/api/v1`; random UI components must
+  not call `fetch` directly or import backend internals. UI copy must not claim
+  unsupported production/admin features such as auth, RBAC, tenants, provider
+  management, policy editing, global audit search or global approval queues.
 
 ## 5. Source-of-Truth Docs
 

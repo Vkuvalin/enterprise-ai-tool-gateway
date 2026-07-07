@@ -2,11 +2,11 @@
 
 This document maps the current and planned architecture for `enterprise-ai-tool-gateway`.
 
-Current status: Stage 8 backend API and deterministic acceptance eval surface is
-implemented on top of the Stage 7 demo template expansion and Stage 6 provider
-and MCP boundary hardening. The project remains a backend-first MVP; the API is
-a local/demo adapter surface, not a production platform. Web UI, production
-integrations, auth, workers and migrations are not implemented.
+Current status: Stage 9 modular local/demo web client surface is implemented on
+top of the Stage 8 backend API and deterministic acceptance eval surface. The
+project remains a backend-first MVP; the API and web client are local/demo
+surfaces, not a production platform. Production integrations, auth, workers,
+deployment and migrations are not implemented.
 
 ## 1. Current Package Map
 
@@ -34,11 +34,25 @@ Implemented source packages under `src/enterprise_ai_tool_gateway/`:
 | `api/http/dependencies.py` | implemented | Request-scoped DB session, repository and runtime dependency wiring using deterministic mock/fake providers by default. |
 | `evals/` | implemented | Deterministic API-level acceptance case definitions, runner logic and JSON/text result models. |
 
-Planned later packages remain subject to their own Stage Briefs:
+Implemented frontend package at repository root:
 
 ```text
-web/static
+frontend/
 ```
+
+`frontend/` owns the independent React/Vite web client. It is not part of the
+Python package and is not mounted into FastAPI in Stage 9.
+
+Frontend ownership:
+
+| Frontend area | Status | Ownership |
+| ------------- | ------ | --------- |
+| `frontend/src/api/` | implemented | HTTP API client for FastAPI `/api/v1`; all frontend HTTP calls go through this boundary. |
+| `frontend/src/features/` | implemented | Workflow, run, approval, tool-call, audit and settings feature modules. |
+| `frontend/src/components/` | implemented | Reusable layout, feedback, data, form and status UI components. |
+| `frontend/src/pages/` | implemented | Route-level screens for dashboard, workflow catalog, workflow submit, run detail, run-scoped approvals, tool calls, audit trail, session approvals and settings. |
+| `frontend/src/state/` | implemented | Browser local known-run index storing run IDs only. |
+| `frontend/src/styles/` | implemented | Dark-first local/demo command-center CSS tokens and global styles. |
 
 ## 2. Dependency Direction
 
@@ -102,6 +116,12 @@ route handlers. Stage 8 does not add production auth, tenant isolation or RBAC.
 through FastAPI's in-process test client. Evals use mock/fake providers only and
 do not benchmark models, compare providers or call real external services.
 
+`frontend/` owns the Stage 9 local/demo web client. It talks only to FastAPI
+`/api/v1` through `frontend/src/api/`, mirrors public API DTO shapes in
+TypeScript without importing backend Python internals, and renders controlled
+gateway outcomes as UI states. Backend execution remains behind FastAPI
+`/api/v1`; the frontend must not execute workflow logic directly.
+
 ## 4. Current Entrypoints
 
 Current deterministic test entrypoint:
@@ -123,6 +143,17 @@ uv run python scripts/run_eval.py
 uv run python scripts/run_eval.py --format json
 ```
 
+Current local/demo frontend entrypoint:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite dev server proxies `/api` to `http://localhost:8000/api`, while the
+frontend API client uses `/api/v1` by default.
+
 Current validation commands:
 
 ```bash
@@ -130,6 +161,12 @@ uv run pytest
 uv run ruff check .
 uv run pyright
 git diff --check
+uv run python scripts/run_eval.py
+uv run python scripts/run_eval.py --format json
+cd frontend
+npm install
+npm run typecheck
+npm run build
 ```
 
 Manual utilities exist for provider/MCP checks, but real-provider smoke remains
@@ -142,15 +179,16 @@ uv run python scripts/manual_gigachat_smoke.py --live --matrix lite,pro,max
 
 ## 5. Current Non-Entrypoints
 
-There is currently no production FastAPI route layer, approval UI, production
-MCP lifecycle, Alembic migration setup, background worker, real enterprise
-integration or production auth layer. The Stage 8 API is local/demo only and
-does not implement authenticated users, tenants, RBAC, provider selection,
-domain CRUD, run listing/search/history or real connectors. Stage 5 access
-runtime is not rewritten to MCP. Stage 7 procurement and maintenance templates
-add no real procurement or maintenance connectors, no domain DB tables, and no
-real purchase order or work order lifecycle. Their controlled actions create
-synthetic drafts only.
+There is currently no production FastAPI route layer, production MCP lifecycle,
+Alembic migration setup, background worker, real enterprise integration or
+production auth layer. The Stage 8 API and Stage 9 web client are local/demo
+only and do not implement authenticated users, tenants, RBAC, provider
+selection, domain CRUD, global run listing/search/history, global audit search,
+global backend approval queue or real connectors. Stage 5 access runtime is not
+rewritten to MCP. Stage 7 procurement and maintenance templates add no real
+procurement or maintenance connectors, no domain DB tables, and no real purchase
+order or work order lifecycle. Their controlled actions create synthetic drafts
+only.
 
 ## 6. Tests
 
@@ -170,3 +208,5 @@ Current tests are deterministic and offline by default. Stage 4 coverage include
 * shared Stage 7 demo workflow helper mechanics;
 * Stage 8 local/demo API health, capabilities, workflow submit, approval resolve and run read endpoints;
 * Stage 8 deterministic API-level acceptance eval runner and 21-case acceptance matrix.
+* Stage 9 frontend validation is performed with the frontend package commands:
+  `npm install`, `npm run typecheck` and `npm run build`.
