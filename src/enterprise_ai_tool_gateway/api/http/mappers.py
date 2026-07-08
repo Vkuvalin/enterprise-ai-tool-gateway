@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
+from typing import cast, overload
 from uuid import UUID
 
+from enterprise_ai_tool_gateway.audit import redact_payload
 from enterprise_ai_tool_gateway.api.http.schemas.approvals import ApprovalResolveRequest
 from enterprise_ai_tool_gateway.api.http.schemas.runs import (
     ApprovalResponse,
@@ -135,10 +138,8 @@ def tool_call_to_response(tool_call: ToolCallRead) -> ToolCallResponse:
         tool_name=tool_call.tool_name,
         tool_type=tool_call.tool_type.value,
         status=tool_call.status.value,
-        input_payload=dict(tool_call.input_payload),
-        output_payload=(
-            dict(tool_call.output_payload) if tool_call.output_payload is not None else None
-        ),
+        input_payload=_public_tool_input_payload(tool_call.input_payload),
+        output_payload=_public_tool_output_payload(tool_call.output_payload),
         error_message=tool_call.error_message,
         requires_approval=tool_call.requires_approval,
         approval_id=str(tool_call.approval_id) if tool_call.approval_id is not None else None,
@@ -154,10 +155,13 @@ def approval_to_response(approval: ApprovalRead) -> ApprovalResponse:
         tool_call_id=str(approval.tool_call_id) if approval.tool_call_id is not None else None,
         status=approval.status.value,
         required_approver_role=approval.required_approver_role,
-        summary=approval.summary,
-        reason=approval.reason,
-        decided_by=approval.decided_by,
-        decision_comment=approval.decision_comment,
+        summary=_public_approval_text("summary", approval.summary),
+        reason=_public_approval_text("reason", approval.reason),
+        decided_by=_public_approval_text("decided_by", approval.decided_by),
+        decision_comment=_public_approval_text(
+            "decision_comment",
+            approval.decision_comment,
+        ),
         created_at=_iso(approval.created_at),
         updated_at=_iso(approval.updated_at),
     )
@@ -176,3 +180,28 @@ def audit_event_to_response(event: AuditEventRead) -> AuditEventResponse:
 
 def _iso(value: datetime) -> str:
     return value.isoformat()
+
+
+def _public_tool_input_payload(payload: Mapping[str, object]) -> dict[str, object]:
+    return redact_payload(payload)
+
+
+def _public_tool_output_payload(payload: Mapping[str, object] | None) -> dict[str, object] | None:
+    if payload is None:
+        return None
+    return redact_payload(payload)
+
+
+@overload
+def _public_approval_text(field_name: str, value: str) -> str: ...
+
+
+@overload
+def _public_approval_text(field_name: str, value: None) -> None: ...
+
+
+def _public_approval_text(field_name: str, value: str | None) -> str | None:
+    if value is None:
+        return None
+    redacted = redact_payload({field_name: value})[field_name]
+    return cast(str, redacted)

@@ -174,19 +174,18 @@ def test_llm_decision_payload_rejects_unknown_enum_value() -> None:
         )
 
 
-def test_llm_decision_payload_accepts_legacy_domain_template_alias() -> None:
-    decision = LLMDecisionPayload.model_validate(
-        {
-            "request_type": RequestType.ACCESS_REQUEST,
-            "domain_template": "ACCESS_REQUEST",
-            "confidence": 0.95,
-            "risk_level": RiskLevel.MEDIUM,
-            "requires_approval": True,
-            "user_facing_summary": "Access request classified.",
-        }
-    )
-
-    assert decision.domain_template is DomainTemplate.ACCESS
+def test_llm_decision_payload_rejects_legacy_domain_template_alias() -> None:
+    with pytest.raises(ValidationError):
+        LLMDecisionPayload.model_validate(
+            {
+                "request_type": RequestType.ACCESS_REQUEST,
+                "domain_template": "ACCESS_REQUEST",
+                "confidence": 0.95,
+                "risk_level": RiskLevel.MEDIUM,
+                "requires_approval": True,
+                "user_facing_summary": "Access request classified.",
+            }
+        )
 
 
 def test_read_contracts_validate_minimal_foundation_shapes() -> None:

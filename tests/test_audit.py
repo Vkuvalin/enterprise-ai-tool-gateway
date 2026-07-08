@@ -53,6 +53,45 @@ def test_recursive_redaction() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "sensitive_value",
+    [
+        "Authorization: Bearer abc123456",
+        "Bearer sk-live-token-123456789",
+        "api_key=abc123456",
+        "password=correct-horse-battery-staple",
+        "token=abc123456",
+        "secret: abc123456",
+        "Set-Cookie: session_id=abc123456; Path=/",
+    ],
+)
+def test_neutral_string_values_with_sensitive_markers_are_redacted(
+    sensitive_value: str,
+) -> None:
+    redacted = redact_payload({"message": sensitive_value})
+
+    assert redacted["message"] == REDACTED_VALUE
+
+
+def test_nested_neutral_string_values_with_sensitive_markers_are_redacted() -> None:
+    redacted = redact_payload(
+        {
+            "details": {
+                "summary": "Routine change",
+                "items": [
+                    {"note": "No credential here."},
+                    {"note": "Bearer sk-nested-token-123456789"},
+                ],
+            }
+        }
+    )
+
+    assert redacted["details"] == {
+        "summary": "Routine change",
+        "items": [{"note": "No credential here."}, {"note": REDACTED_VALUE}],
+    }
+
+
 def test_case_insensitive_sensitive_keys() -> None:
     redacted = redact_payload({"Authorization": "Bearer secret", "CLIENT_SECRET": "secret"})
 
@@ -80,6 +119,22 @@ def test_redaction_keeps_adjacent_normal_domain_keys() -> None:
     redacted = redact_payload({"access_level": "admin", "client_name": "Acme"})
 
     assert redacted == {"access_level": "admin", "client_name": "Acme"}
+
+
+def test_value_redaction_keeps_ordinary_business_text() -> None:
+    redacted = redact_payload(
+        {
+            "message": "API key rotation is scheduled; no credential material is included.",
+            "details": "Design token guidelines are documented for the frontend.",
+            "summary": "Password reset workflow review completed without sample secrets.",
+        }
+    )
+
+    assert redacted == {
+        "message": "API key rotation is scheduled; no credential material is included.",
+        "details": "Design token guidelines are documented for the frontend.",
+        "summary": "Password reset workflow review completed without sample secrets.",
+    }
 
 
 def test_long_string_truncation() -> None:

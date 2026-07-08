@@ -23,7 +23,7 @@ export function MaintenanceRequestPage() {
     asset_name: "Cooling pump 1",
     issue_description: "Routine inspection needed.",
     location: "Plant A",
-    observed_severity: "low",
+    observed_severity: "LOW",
     safety_concern: false,
     approval_mode: "HIGH_RISK_ONLY"
   });
@@ -100,11 +100,19 @@ export function MaintenanceRequestPage() {
               Observed severity
               <select
                 value={form.observed_severity ?? ""}
-                onChange={(event) => setForm({ ...form, observed_severity: event.target.value || null })}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    observed_severity: event.target.value
+                      ? (event.target.value as MaintenanceSubmitRequest["observed_severity"])
+                      : null
+                  })
+                }
               >
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
+                <option value="LOW">LOW</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="HIGH">HIGH</option>
+                <option value="CRITICAL">CRITICAL</option>
               </select>
             </label>
             <label>

@@ -70,6 +70,7 @@ from enterprise_ai_tool_gateway.maintenance_lite.schemas import (
     GetOpenMaintenanceTicketsOutput,
     MaintenancePolicyOutput,
     MaintenanceRequesterStatus,
+    MaintenanceSeverity,
 )
 from enterprise_ai_tool_gateway.policy import (
     PolicyCheckRequest,
@@ -102,7 +103,7 @@ class _MaintenanceRequestFields:
     asset_name: str | None
     issue_description: str
     location: str | None
-    observed_severity: str | None
+    observed_severity: MaintenanceSeverity | None
     safety_concern: bool
 
 

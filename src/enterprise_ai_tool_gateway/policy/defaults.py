@@ -31,28 +31,27 @@ def evaluate_default_tool_policy(request: PolicyCheckRequest) -> PolicyDecision:
             "Approval and audit tools require manual review in Stage 4.",
         )
 
-    if (
-        request.requires_approval_by_default
-        and request.approval_mode is not ApprovalMode.AUTO_APPROVE
-    ):
-        return _requires_approval(
-            request,
-            "TOOL_REQUIRES_APPROVAL_BY_DEFAULT",
-            "Tool metadata requires approval by default.",
-        )
-
     if request.tool_type is ToolType.READ_ONLY:
+        if (
+            request.requires_approval_by_default
+            and request.approval_mode is not ApprovalMode.AUTO_APPROVE
+        ):
+            return _requires_approval(
+                request,
+                "TOOL_REQUIRES_APPROVAL_BY_DEFAULT",
+                "Tool metadata requires approval by default.",
+            )
         return _allowed(
             request,
             "READ_ONLY_ALLOWED",
             "Read-only tool call is allowed by default policy.",
         )
 
-    if request.approval_mode is ApprovalMode.AUTO_APPROVE:
-        return _allowed(
+    if request.requires_approval_by_default:
+        return _requires_approval(
             request,
-            "AUTO_APPROVE_STATE_CHANGING_ALLOWED",
-            "State-changing tool call is allowed by AUTO_APPROVE mode.",
+            "TOOL_REQUIRES_APPROVAL_BY_DEFAULT",
+            "Tool metadata requires approval by default.",
         )
 
     if request.approval_mode is ApprovalMode.ALWAYS_REQUIRE:
@@ -62,14 +61,18 @@ def evaluate_default_tool_policy(request: PolicyCheckRequest) -> PolicyDecision:
             "State-changing tool call requires approval.",
         )
 
-    if (
-        request.approval_mode is ApprovalMode.HIGH_RISK_ONLY
-        and request.risk_level is RiskLevel.HIGH
-    ):
+    if request.risk_level is RiskLevel.HIGH:
         return _requires_approval(
             request,
             "HIGH_RISK_STATE_CHANGING_REQUIRES_APPROVAL",
             "High-risk state-changing tool call requires approval.",
+        )
+
+    if request.approval_mode is ApprovalMode.AUTO_APPROVE:
+        return _allowed(
+            request,
+            "AUTO_APPROVE_STATE_CHANGING_ALLOWED",
+            "State-changing tool call is allowed by AUTO_APPROVE mode.",
         )
 
     return _allowed(

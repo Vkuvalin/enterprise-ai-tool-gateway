@@ -107,6 +107,13 @@ class _AccessRequestFields:
     duration_days: int
 
 
+@dataclass(frozen=True)
+class _ProviderDecisionValidationResult:
+    is_valid: bool
+    reason_codes: list[str]
+    safe_summary: str | None = None
+
+
 class AccessWorkflowRuntime:
     """Coordinate one approved access workflow transaction at a time."""
 
@@ -213,6 +220,7 @@ class AccessWorkflowRuntime:
             {
                 "schema_valid": True,
                 "request_type": decision_payload.request_type.value,
+                "domain_template": decision_payload.domain_template.value,
                 "risk_level": decision_payload.risk_level.value,
                 "proposed_tool_names": [
                     tool.name for tool in decision_payload.proposed_tool_calls
@@ -220,9 +228,12 @@ class AccessWorkflowRuntime:
             },
         )
 
-        invalid_summary = self._validate_provider_decision(decision_payload)
-        if invalid_summary is not None:
+        validation_result = self._validate_provider_decision(decision_payload)
+        if not validation_result.is_valid:
             status = transition(status, WorkflowEventType.DECISION_INVALID)
+            invalid_summary = validation_result.safe_summary or (
+                "Access request failed provider validation."
+            )
             run = await self._repo.update_agent_run_result(
                 run.id,
                 status=status,
@@ -237,7 +248,7 @@ class AccessWorkflowRuntime:
             await self._audit(
                 run.id,
                 AuditEventType.RUN_FAILED,
-                {"status": status.value, "reason_codes": ["UNKNOWN_TOOL_PROPOSAL"]},
+                {"status": status.value, "reason_codes": validation_result.reason_codes},
             )
             return await self._commit_and_build_result(run)
 
@@ -724,17 +735,41 @@ class AccessWorkflowRuntime:
         )
         return decision_payload, True
 
-    def _validate_provider_decision(self, decision_payload: LLMDecisionPayload) -> str | None:
+    def _validate_provider_decision(
+        self, decision_payload: LLMDecisionPayload
+    ) -> _ProviderDecisionValidationResult:
         if decision_payload.request_type is not RequestType.ACCESS_REQUEST:
-            return "Access request failed validation because provider chose a different request type."
+            return _ProviderDecisionValidationResult(
+                is_valid=False,
+                reason_codes=["REQUEST_TYPE_MISMATCH"],
+                safe_summary=(
+                    "Access request failed validation because provider chose a different "
+                    "request type."
+                ),
+            )
+        if decision_payload.domain_template is not DomainTemplate.ACCESS:
+            return _ProviderDecisionValidationResult(
+                is_valid=False,
+                reason_codes=["DOMAIN_TEMPLATE_MISMATCH"],
+                safe_summary=(
+                    "Access request failed validation because provider chose a different "
+                    "domain template."
+                ),
+            )
         unknown_tool_names = [
             tool.name
             for tool in decision_payload.proposed_tool_calls
             if tool.name not in _ACCESS_TOOL_NAMES or not self._registry.has(tool.name)
         ]
         if unknown_tool_names:
-            return "Access request failed validation because provider proposed an unknown tool."
-        return None
+            return _ProviderDecisionValidationResult(
+                is_valid=False,
+                reason_codes=["UNKNOWN_TOOL_PROPOSAL"],
+                safe_summary=(
+                    "Access request failed validation because provider proposed an unknown tool."
+                ),
+            )
+        return _ProviderDecisionValidationResult(is_valid=True, reason_codes=[])
 
     def _missing_access_tool_names(self) -> list[str]:
         return sorted(

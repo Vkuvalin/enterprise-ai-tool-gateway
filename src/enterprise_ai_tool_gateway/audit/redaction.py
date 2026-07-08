@@ -47,6 +47,29 @@ SENSITIVE_KEY_PHRASES = frozenset(
         ("bearer", "token"),
     }
 )
+SENSITIVE_VALUE_PATTERNS = (
+    re.compile(
+        r"\bauthorization\s*:\s*(?:bearer|basic|token)\s+\S+",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bbearer\s+(?:sk-[A-Za-z0-9_-]+|[A-Za-z0-9._~+/=-]{8,})\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        (
+            r"\b(?:api[_\s-]*key|access[_\s-]*token|refresh[_\s-]*token|"
+            r"client[_\s-]*secret|password|secret|token)\b"
+            r"\s*[:=]\s*['\"]?[^'\"\s,;]+"
+        ),
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:cookie|set-cookie)\s*:\s*[^=\s;]+=[^;\s]+",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b", re.IGNORECASE),
+)
 
 
 def redact_payload(
@@ -92,6 +115,8 @@ def _redact_nested(value: object, *, max_string_length: int) -> object:
             _redact_nested(item, max_string_length=max_string_length) for item in sequence_value
         ]
     if isinstance(value, str):
+        if _has_sensitive_value_marker(value):
+            return REDACTED_VALUE
         return _truncate_string(value, max_string_length=max_string_length)
     return value
 
@@ -124,6 +149,10 @@ def _contains_phrase(tokens: tuple[str, ...], phrase: tuple[str, ...]) -> bool:
         tokens[index : index + phrase_length] == phrase
         for index in range(len(tokens) - phrase_length + 1)
     )
+
+
+def _has_sensitive_value_marker(value: str) -> bool:
+    return any(pattern.search(value) is not None for pattern in SENSITIVE_VALUE_PATTERNS)
 
 
 def _is_non_string_sequence(value: object) -> bool:

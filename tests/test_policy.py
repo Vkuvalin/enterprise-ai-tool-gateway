@@ -27,7 +27,7 @@ def make_request(
     )
 
 
-def test_approval_mode_affects_approval_decision() -> None:
+def test_auto_approve_does_not_bypass_high_risk_state_changing_safety_floor() -> None:
     auto_decision = evaluate_default_tool_policy(
         make_request(risk_level=RiskLevel.HIGH, approval_mode=ApprovalMode.AUTO_APPROVE)
     )
@@ -35,7 +35,8 @@ def test_approval_mode_affects_approval_decision() -> None:
         make_request(risk_level=RiskLevel.HIGH, approval_mode=ApprovalMode.HIGH_RISK_ONLY)
     )
 
-    assert auto_decision.status is PolicyDecisionStatus.ALLOWED
+    assert auto_decision.status is PolicyDecisionStatus.REQUIRES_APPROVAL
+    assert auto_decision.requires_approval is True
     assert high_risk_decision.status is PolicyDecisionStatus.REQUIRES_APPROVAL
 
 
@@ -66,6 +67,15 @@ def test_high_risk_only_requires_approval_for_high_risk_state_changing() -> None
     assert decision.requires_approval is True
 
 
+def test_auto_approve_allows_low_medium_state_changing_without_default_requirement() -> None:
+    decision = evaluate_default_tool_policy(
+        make_request(risk_level=RiskLevel.MEDIUM, approval_mode=ApprovalMode.AUTO_APPROVE)
+    )
+
+    assert decision.status is PolicyDecisionStatus.ALLOWED
+    assert decision.requires_approval is False
+
+
 def test_auto_approve_does_not_bypass_manual_review_safety_floor() -> None:
     decision = evaluate_default_tool_policy(
         make_request(
@@ -84,10 +94,10 @@ def test_auto_approve_does_not_bypass_manual_review_safety_floor() -> None:
     [
         (ApprovalMode.HIGH_RISK_ONLY, PolicyDecisionStatus.REQUIRES_APPROVAL),
         (ApprovalMode.ALWAYS_REQUIRE, PolicyDecisionStatus.REQUIRES_APPROVAL),
-        (ApprovalMode.AUTO_APPROVE, PolicyDecisionStatus.ALLOWED),
+        (ApprovalMode.AUTO_APPROVE, PolicyDecisionStatus.REQUIRES_APPROVAL),
     ],
 )
-def test_requires_approval_by_default_respects_approval_mode(
+def test_state_changing_requires_approval_by_default_sets_safety_floor(
     approval_mode: ApprovalMode,
     expected_status: PolicyDecisionStatus,
 ) -> None:

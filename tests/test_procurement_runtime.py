@@ -152,7 +152,21 @@ async def test_high_value_high_risk_only_waits_then_approved_resolution_complete
 
 
 @pytest.mark.asyncio
-async def test_high_value_auto_approve_completes_without_approval() -> None:
+async def test_low_medium_auto_approve_completes_without_approval() -> None:
+    async def run_case(runtime: ProcurementWorkflowRuntime) -> None:
+        result = await runtime.submit_procurement_request(
+            _request(approval_mode=ApprovalMode.AUTO_APPROVE)
+        )
+
+        assert result.run.status is AgentRunStatus.COMPLETED
+        assert result.approval is None
+        assert _tool_status(result, "create_purchase_request_draft") is ToolCallStatus.SUCCEEDED
+
+    await _with_runtime(run_case)
+
+
+@pytest.mark.asyncio
+async def test_high_value_auto_approve_waits_for_approval_without_draft() -> None:
     async def run_case(runtime: ProcurementWorkflowRuntime) -> None:
         result = await runtime.submit_procurement_request(
             _request(
@@ -162,9 +176,12 @@ async def test_high_value_auto_approve_completes_without_approval() -> None:
             )
         )
 
-        assert result.run.status is AgentRunStatus.COMPLETED
-        assert result.approval is None
-        assert _tool_status(result, "create_purchase_request_draft") is ToolCallStatus.SUCCEEDED
+        assert result.run.status is AgentRunStatus.WAITING_FOR_APPROVAL
+        assert result.approval is not None
+        assert result.requires_approval is True
+        assert _tool_status(result, "create_purchase_request_draft") is (
+            ToolCallStatus.WAITING_FOR_APPROVAL
+        )
 
     await _with_runtime(run_case)
 

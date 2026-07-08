@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from enterprise_ai_tool_gateway.contracts.enums import (
     AgentRunStatus,
@@ -20,14 +19,6 @@ from enterprise_ai_tool_gateway.contracts.enums import (
     ToolCallStatus,
     ToolType,
 )
-
-LEGACY_DOMAIN_TEMPLATE_ALIASES = {
-    RequestType.ACCESS_REQUEST.value: DomainTemplate.ACCESS,
-    RequestType.PROCUREMENT_REQUEST.value: DomainTemplate.PROCUREMENT,
-    RequestType.MAINTENANCE_REQUEST.value: DomainTemplate.MAINTENANCE_LITE,
-    RequestType.POLICY_INQUIRY.value: DomainTemplate.POLICY,
-}
-
 
 class ContractModel(BaseModel):
     """Base contract settings for explicit schema boundaries."""
@@ -58,13 +49,6 @@ class LLMDecisionPayload(ContractModel):
     proposed_tool_calls: list[ProposedToolCall] = Field(default_factory=list)
     user_facing_summary: str
     reason_codes: list[str] = Field(default_factory=list)
-
-    @field_validator("domain_template", mode="before")
-    @classmethod
-    def normalize_legacy_domain_template(cls, value: Any) -> Any:
-        if isinstance(value, str):
-            return LEGACY_DOMAIN_TEMPLATE_ALIASES.get(value, value)
-        return value
 
 
 class AgentRunRead(ContractModel):

@@ -78,6 +78,8 @@ export type ProcurementSubmitRequest = {
   approval_mode: ApprovalMode;
 };
 
+export type MaintenanceSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
 export type MaintenanceSubmitRequest = {
   user_id: string;
   request_text: string;
@@ -86,7 +88,7 @@ export type MaintenanceSubmitRequest = {
   asset_name?: string | null;
   issue_description?: string | null;
   location?: string | null;
-  observed_severity?: string | null;
+  observed_severity?: MaintenanceSeverity | null;
   safety_concern?: boolean | null;
   approval_mode: ApprovalMode;
 };

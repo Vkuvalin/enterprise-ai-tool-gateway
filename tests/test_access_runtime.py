@@ -159,15 +159,32 @@ async def test_high_risk_high_risk_only_waits_then_approved_resolution_completes
 
 
 @pytest.mark.asyncio
-async def test_high_risk_auto_approve_completes_without_approval() -> None:
+async def test_low_medium_auto_approve_completes_without_approval() -> None:
     async def run_case(runtime: AccessWorkflowRuntime) -> None:
         result = await runtime.submit_access_request(
-            _request(access_level=AccessLevel.ADMIN, approval_mode=ApprovalMode.AUTO_APPROVE)
+            _request(approval_mode=ApprovalMode.AUTO_APPROVE)
         )
 
         assert result.run.status is AgentRunStatus.COMPLETED
         assert result.approval is None
         assert _tool_status(result, "create_access_request_draft") is ToolCallStatus.SUCCEEDED
+
+    await _with_runtime(run_case)
+
+
+@pytest.mark.asyncio
+async def test_high_risk_auto_approve_waits_for_approval_without_draft() -> None:
+    async def run_case(runtime: AccessWorkflowRuntime) -> None:
+        result = await runtime.submit_access_request(
+            _request(access_level=AccessLevel.ADMIN, approval_mode=ApprovalMode.AUTO_APPROVE)
+        )
+
+        assert result.run.status is AgentRunStatus.WAITING_FOR_APPROVAL
+        assert result.approval is not None
+        assert result.requires_approval is True
+        assert _tool_status(result, "create_access_request_draft") is (
+            ToolCallStatus.WAITING_FOR_APPROVAL
+        )
 
     await _with_runtime(run_case)
 
@@ -340,8 +357,24 @@ async def test_unknown_tool_proposal_failed_validation_without_tool_execution() 
         assert result.run.status is AgentRunStatus.FAILED_VALIDATION
         assert result.tool_calls == []
         assert AuditEventType.RUN_FAILED in _event_types(result)
+        assert "UNKNOWN_TOOL_PROPOSAL" in _last_reason_codes(result, AuditEventType.RUN_FAILED)
 
     await _with_runtime(run_case, provider=UnknownToolProvider())
+
+
+@pytest.mark.asyncio
+async def test_domain_template_mismatch_failed_validation_without_tool_execution() -> None:
+    async def run_case(runtime: AccessWorkflowRuntime) -> None:
+        result = await runtime.submit_access_request(_request())
+
+        assert result.run.status is AgentRunStatus.FAILED_VALIDATION
+        assert result.tool_calls == []
+        assert "DOMAIN_TEMPLATE_MISMATCH" in _last_reason_codes(result, AuditEventType.RUN_FAILED)
+
+    await _with_runtime(
+        run_case,
+        provider=UnknownToolProvider(domain_template=DomainTemplate.PROCUREMENT),
+    )
 
 
 @pytest.mark.asyncio
@@ -362,21 +395,32 @@ async def test_action_tool_boundary_failure_is_persisted_safely_without_raw_exce
 
 
 class UnknownToolProvider:
+    def __init__(
+        self,
+        proposed_tool_name: str = "delete_access_grant",
+        *,
+        request_type: RequestType = RequestType.ACCESS_REQUEST,
+        domain_template: DomainTemplate = DomainTemplate.ACCESS,
+    ) -> None:
+        self._proposed_tool_name = proposed_tool_name
+        self._request_type = request_type
+        self._domain_template = domain_template
+
     async def generate_structured_decision(
         self,
         request: LLMDecisionRequest,
     ) -> LLMDecisionResponse:
         _ = request
         return LLMDecisionResponse(
-            request_type=RequestType.ACCESS_REQUEST,
-            domain_template=DomainTemplate.ACCESS,
+            request_type=self._request_type,
+            domain_template=self._domain_template,
             confidence=0.95,
             risk_level=RiskLevel.MEDIUM,
             requires_approval=True,
             missing_fields=[],
             proposed_tool_calls=[
                 ProposedToolCall(
-                    name="delete_access_grant",
+                    name=self._proposed_tool_name,
                     arguments={"employee_id": "emp-001"},
                     requires_approval=True,
                 )
@@ -441,3 +485,14 @@ def _events_of_type(
     event_type: AuditEventType,
 ) -> list[AuditEventRead]:
     return [event for event in result.audit_events if event.event_type is event_type]
+
+
+def _last_reason_codes(
+    result: AccessWorkflowResult,
+    event_type: AuditEventType,
+) -> list[str]:
+    events = _events_of_type(result, event_type)
+    assert events
+    reason_codes = events[-1].payload["reason_codes"]
+    assert isinstance(reason_codes, list)
+    return [str(reason_code) for reason_code in reason_codes]

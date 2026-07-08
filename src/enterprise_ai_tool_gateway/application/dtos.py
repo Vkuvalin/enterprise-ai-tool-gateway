@@ -14,6 +14,7 @@ from enterprise_ai_tool_gateway.contracts.schemas import (
     AuditEventRead,
     ToolCallRead,
 )
+from enterprise_ai_tool_gateway.maintenance_lite.schemas import MaintenanceSeverity
 
 
 class ApplicationModel(BaseModel):
@@ -102,7 +103,7 @@ class MaintenanceWorkflowRequest(ApplicationModel):
     asset_name: str | None = None
     issue_description: str | None = None
     location: str | None = None
-    observed_severity: str | None = None
+    observed_severity: MaintenanceSeverity | None = None
     safety_concern: bool | None = None
     approval_mode: ApprovalMode = ApprovalMode.HIGH_RISK_ONLY
 

@@ -29,6 +29,7 @@ from enterprise_ai_tool_gateway.db import (
     create_database_schema,
 )
 from enterprise_ai_tool_gateway.llm import LLMDecisionRequest, LLMDecisionResponse, LLMProviderPort
+from enterprise_ai_tool_gateway.maintenance_lite.schemas import MaintenanceSeverity
 
 
 async def _build_runtime(
@@ -58,7 +59,7 @@ def _request(
     asset_id: str | None = "asset-pump-001",
     asset_name: str | None = None,
     issue_description: str | None = "Routine inspection needed.",
-    observed_severity: str | None = None,
+    observed_severity: MaintenanceSeverity | None = None,
     safety_concern: bool | None = False,
     approval_mode: ApprovalMode = ApprovalMode.HIGH_RISK_ONLY,
 ) -> MaintenanceWorkflowRequest:
@@ -91,7 +92,9 @@ async def _with_runtime(
 @pytest.mark.asyncio
 async def test_low_medium_maintenance_completes_without_approval_and_persists_draft() -> None:
     async def run_case(runtime: MaintenanceLiteWorkflowRuntime) -> None:
-        result = await runtime.submit_maintenance_request(_request())
+        result = await runtime.submit_maintenance_request(
+            _request(observed_severity=MaintenanceSeverity.LOW)
+        )
 
         assert result.run.status is AgentRunStatus.COMPLETED
         assert result.run.risk_level is RiskLevel.MEDIUM
@@ -158,7 +161,24 @@ async def test_high_severity_high_risk_only_waits_then_approved_resolution_compl
 
 
 @pytest.mark.asyncio
-async def test_high_severity_auto_approve_completes_without_approval() -> None:
+async def test_low_medium_auto_approve_completes_without_approval() -> None:
+    async def run_case(runtime: MaintenanceLiteWorkflowRuntime) -> None:
+        result = await runtime.submit_maintenance_request(
+            _request(
+                observed_severity=MaintenanceSeverity.LOW,
+                approval_mode=ApprovalMode.AUTO_APPROVE,
+            )
+        )
+
+        assert result.run.status is AgentRunStatus.COMPLETED
+        assert result.approval is None
+        assert _tool_status(result, "create_work_order_draft") is ToolCallStatus.SUCCEEDED
+
+    await _with_runtime(run_case)
+
+
+@pytest.mark.asyncio
+async def test_high_severity_auto_approve_waits_for_approval_without_draft() -> None:
     async def run_case(runtime: MaintenanceLiteWorkflowRuntime) -> None:
         result = await runtime.submit_maintenance_request(
             _request(
@@ -167,9 +187,12 @@ async def test_high_severity_auto_approve_completes_without_approval() -> None:
             )
         )
 
-        assert result.run.status is AgentRunStatus.COMPLETED
-        assert result.approval is None
-        assert _tool_status(result, "create_work_order_draft") is ToolCallStatus.SUCCEEDED
+        assert result.run.status is AgentRunStatus.WAITING_FOR_APPROVAL
+        assert result.approval is not None
+        assert result.requires_approval is True
+        assert _tool_status(result, "create_work_order_draft") is (
+            ToolCallStatus.WAITING_FOR_APPROVAL
+        )
 
     await _with_runtime(run_case)
 
@@ -194,7 +217,10 @@ async def test_low_medium_always_require_waits_for_approval() -> None:
 async def test_smoke_text_cannot_be_downgraded_by_observed_low_severity() -> None:
     async def run_case(runtime: MaintenanceLiteWorkflowRuntime) -> None:
         result = await runtime.submit_maintenance_request(
-            _request(issue_description="Smoke near the panel.", observed_severity="LOW")
+            _request(
+                issue_description="Smoke near the panel.",
+                observed_severity=MaintenanceSeverity.LOW,
+            )
         )
 
         assert result.run.status is AgentRunStatus.NEEDS_MANUAL_REVIEW
@@ -212,7 +238,7 @@ async def test_failure_text_escalates_to_high_despite_observed_low_severity() ->
         result = await runtime.submit_maintenance_request(
             _request(
                 issue_description="Line stopped after failure.",
-                observed_severity="LOW",
+                observed_severity=MaintenanceSeverity.LOW,
             )
         )
 

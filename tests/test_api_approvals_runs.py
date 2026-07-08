@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from enterprise_ai_tool_gateway.api import create_app
 from enterprise_ai_tool_gateway.api.http.dependencies import get_gateway_repository
+from enterprise_ai_tool_gateway.audit import REDACTED_VALUE
 
 
 def test_approval_resolve_and_run_read_endpoints() -> None:
@@ -38,21 +39,78 @@ def test_approval_resolve_and_run_read_endpoints() -> None:
         audit_events = client.get(f"/api/v1/runs/{run_id}/audit-events")
 
     assert resolved.status_code == 200
-    assert resolved.json()["run"]["status"] == "COMPLETED"
-    assert resolved.json()["approval"]["status"] == "APPROVED"
+    resolved_body = resolved.json()
+    assert resolved_body["run"]["status"] == "COMPLETED"
+    assert resolved_body["approval"]["id"] == approval["id"]
+    assert resolved_body["approval"]["run_id"] == run_id
+    assert resolved_body["approval"]["status"] == "APPROVED"
+    assert resolved_body["approval"]["decided_by"] == "manager-001"
+    assert resolved_body["approval"]["decision_comment"] == "Approved for demo."
 
     assert run_detail.status_code == 200
-    assert run_detail.json()["run"]["status"] == "COMPLETED"
-    assert run_detail.json()["approval"]["status"] == "APPROVED"
-    assert run_detail.json()["tool_calls"]
-    assert run_detail.json()["audit_events"]
+    run_detail_body = run_detail.json()
+    assert run_detail_body["run"]["status"] == "COMPLETED"
+    assert run_detail_body["approval"]["status"] == "APPROVED"
+    assert run_detail_body["approval"]["decision_comment"] == "Approved for demo."
+    assert run_detail_body["tool_calls"]
+    assert run_detail_body["audit_events"]
 
     assert tool_calls.status_code == 200
     assert isinstance(tool_calls.json(), list)
     assert approvals.status_code == 200
-    assert approvals.json()[0]["status"] == "APPROVED"
+    approvals_body = approvals.json()
+    assert approvals_body[0]["status"] == "APPROVED"
+    assert approvals_body[0]["decision_comment"] == "Approved for demo."
     assert audit_events.status_code == 200
     assert any(event["event_type"] == "RUN_COMPLETED" for event in audit_events.json())
+
+
+def test_approval_decision_comment_is_redacted_in_public_readbacks() -> None:
+    sensitive_comment = "Authorization: Bearer approvalsecret123456"
+    with _client() as client:
+        submitted = client.post("/api/v1/access-requests", json=_admin_access_body())
+        assert submitted.status_code == 200
+        submitted_body = submitted.json()
+        approval = submitted_body["approval"]
+        run_id = submitted_body["run"]["id"]
+
+        resolved = client.post(
+            f"/api/v1/approvals/{approval['id']}/resolve",
+            json={
+                "run_id": run_id,
+                "status": "APPROVED",
+                "decided_by": "manager-001",
+                "decision_comment": sensitive_comment,
+            },
+        )
+        run_detail = client.get(f"/api/v1/runs/{run_id}")
+        approvals = client.get(f"/api/v1/runs/{run_id}/approvals")
+
+    assert resolved.status_code == 200
+    resolved_body = resolved.json()
+    assert resolved_body["approval"]["id"] == approval["id"]
+    assert resolved_body["approval"]["run_id"] == run_id
+    assert resolved_body["approval"]["status"] == "APPROVED"
+    assert resolved_body["approval"]["decided_by"] == "manager-001"
+    assert resolved_body["approval"]["decision_comment"] == REDACTED_VALUE
+
+    assert run_detail.status_code == 200
+    run_detail_approval = run_detail.json()["approval"]
+    assert run_detail_approval["id"] == approval["id"]
+    assert run_detail_approval["run_id"] == run_id
+    assert run_detail_approval["status"] == "APPROVED"
+    assert run_detail_approval["decision_comment"] == REDACTED_VALUE
+
+    assert approvals.status_code == 200
+    approval_readback = approvals.json()[0]
+    assert approval_readback["id"] == approval["id"]
+    assert approval_readback["run_id"] == run_id
+    assert approval_readback["status"] == "APPROVED"
+    assert approval_readback["decision_comment"] == REDACTED_VALUE
+
+    assert sensitive_comment not in str(resolved_body)
+    assert sensitive_comment not in str(run_detail.json())
+    assert sensitive_comment not in str(approvals.json())
 
 
 def test_cancelled_approval_rejects_run_without_draft_and_second_resolve_conflicts() -> None:
