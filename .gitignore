@@ -5,6 +5,7 @@
 
 # Runtime data
 # Root runtime/local data only; frontend source folders may also be named data.
+.runtime/
 /data/
 *.db
 *.sqlite

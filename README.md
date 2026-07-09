@@ -56,6 +56,16 @@ Implemented capabilities:
 
 ## 5. Quickstart
 
+Quick demo runner for Windows:
+
+```text
+run_demo.cmd
+```
+
+The runner starts the local backend and frontend, opens the dashboard and keeps
+one controlling PowerShell window open. The manual commands below remain
+available when you want separate terminals.
+
 Start the backend from the repository root:
 
 ```bash

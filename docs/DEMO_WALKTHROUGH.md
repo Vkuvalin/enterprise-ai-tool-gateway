@@ -41,6 +41,16 @@ cd frontend
 npm install
 ```
 
+Fastest Windows start:
+
+```text
+run_demo.cmd
+```
+
+The runner starts both local services, waits for readiness and opens the
+dashboard. Use the manual commands below as the fallback path or when separate
+terminals are preferred.
+
 ## 3. Start the backend
 
 From the repository root, start the FastAPI backend:

@@ -29,8 +29,37 @@ Windows notes:
 
 * Run commands from the repository root unless a section says to use
   `frontend/`.
+* For the fastest local demo start, run `run_demo.cmd` from the repository
+  root. It starts the backend and frontend, writes logs under `.runtime/logs/`
+  and opens `http://127.0.0.1:5173/dashboard`.
 * If `npm` is installed but not on `PATH`, use the full npm executable path:
   `C:\Program Files\nodejs\npm.cmd`.
+
+### Windows demo runner
+
+`run_demo.cmd` is a local convenience wrapper around
+`scripts/demo/run_demo.ps1`. It starts the FastAPI backend on
+`127.0.0.1:8000` and the Vite frontend on `127.0.0.1:5173` only when those
+services are not already healthy/reachable.
+
+Runtime files are local artifacts under `.runtime/`:
+
+```text
+.runtime/demo-backend.pid
+.runtime/demo-frontend.pid
+.runtime/logs/backend.log
+.runtime/logs/frontend.log
+```
+
+Press `Q` in the controlling PowerShell window to stop only the processes
+started by that runner window. To stop a previous runner-owned demo, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1
+```
+
+The stop script reads only the runner PID files and does not kill unrelated
+Python, Node.js, npm, uvicorn or Vite processes.
 
 ## 3. Backend setup and run
 
