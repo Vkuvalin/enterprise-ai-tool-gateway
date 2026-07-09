@@ -21,6 +21,41 @@ validation, tool boundaries, policy checks, approvals, audit records and public
 API readback. It is not production SaaS and it does not integrate with real
 enterprise systems.
 
+```mermaid
+flowchart TB
+    Start["Start local demo<br/>run_demo.cmd or manual commands"]
+    Dashboard["Dashboard<br/>API status / provider mock / workflows"]
+    Workflows["Workflow catalog"]
+
+    Access["Access Request<br/>happy path"]
+    Procurement["Procurement Request<br/>approval path"]
+    ProcurementApproval["Run Approvals<br/>approve / reject / cancel"]
+    Maintenance["Maintenance Request<br/>default safe path"]
+
+    RunDetail["Run Detail<br/>status and final summary"]
+    ToolCalls["Tool Calls<br/>controlled tool execution"]
+    AuditTrail["Audit Trail<br/>lifecycle evidence"]
+
+    Evals["Eval runner<br/>21-case deterministic acceptance suite"]
+
+    Start --> Dashboard
+    Dashboard --> Workflows
+
+    Workflows --> Access
+    Workflows --> Procurement
+    Workflows --> Maintenance
+
+    Access --> RunDetail
+    Procurement --> ProcurementApproval
+    ProcurementApproval --> RunDetail
+    Maintenance --> RunDetail
+
+    RunDetail --> ToolCalls
+    RunDetail --> AuditTrail
+
+    Dashboard --> Evals
+```
+
 ## 2. Before you start
 
 Prerequisites:

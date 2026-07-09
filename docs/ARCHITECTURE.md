@@ -103,56 +103,83 @@ deterministic acceptance cases and mock/fake providers.
 ## 4. Request lifecycle
 
 ```mermaid
-flowchart TD
-    Submit["Workflow request submitted"]
-    Create["Create AgentRun<br/>status CREATED"]
-    ProviderDecision["Provider returns structured decision"]
-    SchemaValidation{"LLMDecisionPayload valid?"}
-    DomainValidation{"request_type, domain_template<br/>and proposed tools valid?"}
-    MissingFields{"Required fields present?"}
-    ReadTools["Execute registered read tools"]
-    ReadToolsOk{"Read tools succeeded?"}
-    PolicyCheck["Evaluate policy for draft action"]
-    PolicyOutcome{"Policy outcome"}
-    ApprovalPending["Create pending approval<br/>no draft output yet"]
-    ApprovalDecision{"Approval decision"}
-    DraftAction["Execute authorized draft tool"]
-    DraftOk{"Draft tool succeeded?"}
-    Audit["Persist audit events"]
-    Readback["GET run/tool/approval/audit readback"]
+sequenceDiagram
+    participant User as User / UI
+    participant FE as Web Frontend
+    participant API as FastAPI /api/v1
+    participant WF as Application Runtime
+    participant Provider as LLM Provider<br/>(mock by default)
+    participant Validation as Contract / Domain Validation
+    participant Policy as Policy Layer
+    participant Approval as Approval Layer
+    participant Tools as Tool Layer
+    participant DB as DB / Audit Events
 
-    FailedProvider["FAILED_PROVIDER"]
-    FailedValidation["FAILED_VALIDATION"]
-    NeedsInput["NEEDS_USER_INPUT"]
-    FailedTool["FAILED_TOOL"]
-    ManualReview["NEEDS_MANUAL_REVIEW"]
-    Rejected["REJECTED"]
-    Waiting["WAITING_FOR_APPROVAL"]
-    Completed["COMPLETED"]
+    User->>FE: Submit workflow form
+    FE->>API: POST /api/v1/{workflow endpoint}
+    API->>WF: Submit workflow request
+    WF->>DB: create AgentRun + audit run_started
 
-    Submit --> Create --> ProviderDecision
-    ProviderDecision --> SchemaValidation
-    SchemaValidation -->|"no"| FailedValidation --> Audit
-    SchemaValidation -->|"provider error"| FailedProvider --> Audit
-    SchemaValidation -->|"yes"| DomainValidation
-    DomainValidation -->|"no"| FailedValidation --> Audit
-    DomainValidation -->|"yes"| MissingFields
-    MissingFields -->|"no"| NeedsInput --> Audit
-    MissingFields -->|"yes"| ReadTools
-    ReadTools --> ReadToolsOk
-    ReadToolsOk -->|"no"| FailedTool --> Audit
-    ReadToolsOk -->|"yes"| PolicyCheck --> PolicyOutcome
-    PolicyOutcome -->|"allowed"| DraftAction
-    PolicyOutcome -->|"requires approval"| ApprovalPending --> Waiting
-    PolicyOutcome -->|"manual review"| ManualReview --> Audit
-    PolicyOutcome -->|"denied"| Rejected --> Audit
-    Waiting --> ApprovalDecision
-    ApprovalDecision -->|"approved"| DraftAction
-    ApprovalDecision -->|"rejected or cancelled"| Rejected --> Audit
-    DraftAction --> DraftOk
-    DraftOk -->|"yes"| Completed --> Audit
-    DraftOk -->|"no"| FailedTool --> Audit
-    Audit --> Readback
+    WF->>Provider: request structured decision
+    Provider-->>WF: structured proposal
+
+    WF->>Validation: validate schema, request_type, domain_template, tool proposal
+
+    alt invalid provider/tool proposal
+        Validation-->>WF: validation failed
+        WF->>DB: persist FAILED_VALIDATION + audit failure
+        WF-->>API: controlled FAILED_VALIDATION
+    else valid proposal
+        Validation-->>WF: valid decision
+        WF->>Tools: execute allowed read/check tools
+        Tools-->>WF: read/check results
+        WF->>Policy: evaluate risk and approval requirement
+
+        alt safe auto path
+            Policy-->>WF: allowed without approval
+            WF->>Tools: execute controlled draft/action tool
+            alt tool succeeds
+                Tools-->>WF: tool result
+                WF->>DB: persist tool call + audit result
+                WF-->>API: controlled COMPLETED
+            else tool fails
+                Tools-->>WF: controlled tool error
+                WF->>DB: persist FAILED_TOOL + audit failure
+                WF-->>API: controlled FAILED_TOOL
+            end
+
+        else approval required
+            Policy-->>WF: approval required
+            WF->>Approval: create pending approval
+            WF->>DB: persist approval + audit approval_required
+            WF-->>API: controlled WAITING_FOR_APPROVAL
+
+            User->>FE: Approve / reject / cancel
+            FE->>API: POST /api/v1/approvals/{approval_id}/resolve
+            API->>WF: resolve approval
+
+            alt approved
+                WF->>Tools: execute controlled draft/action tool
+                Tools-->>WF: tool result
+                WF->>DB: persist approval decision + tool result + audit
+                WF-->>API: controlled COMPLETED
+            else rejected or cancelled
+                WF->>DB: persist decision + audit rejection/cancel
+                WF-->>API: controlled REJECTED
+            end
+
+        else manual review or rejected
+            Policy-->>WF: manual review / reject
+            WF->>DB: persist controlled outcome + audit
+            WF-->>API: NEEDS_MANUAL_REVIEW or REJECTED
+        end
+    end
+
+    API-->>FE: public response with run_id + status
+    FE->>API: GET run detail / tool calls / approvals / audit
+    API->>DB: read persisted records
+    DB-->>API: internal records
+    API-->>FE: redacted public DTOs
 ```
 
 The run is created before the provider is called. The provider decision is then

@@ -207,6 +207,30 @@ The eval runner verifies gateway lifecycle behavior:
 It performs no real provider calls, no network calls and no real enterprise
 connector calls.
 
+```mermaid
+flowchart LR
+    Case["Eval case<br/>deterministic input"]
+    Client["FastAPI test client"]
+    API["/api/v1 endpoint"]
+    Runtime["Application runtime"]
+    Records["Persisted records<br/>run / tool calls / approvals / audit"]
+    Assertions["Assertions<br/>status<br/>approval<br/>draft/no-draft<br/>tool calls<br/>audit events"]
+    Result["Pass / fail result"]
+
+    Case --> Client
+    Client --> API
+    API --> Runtime
+    Runtime --> Records
+    Records --> Assertions
+    Assertions --> Result
+
+    Provider["Mock/static provider path"]
+    Provider --> Runtime
+
+    NonGoals["Not an LLM benchmark<br/>Not real provider smoke<br/>Not production monitoring"]
+    NonGoals -. "explicitly out of scope" .-> Case
+```
+
 ## 10. Acceptance matrix
 
 The current deterministic suite contains 21 cases.

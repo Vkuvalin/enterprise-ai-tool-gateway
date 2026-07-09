@@ -23,6 +23,46 @@ Top-level areas:
 | `docs/` | Public project documentation and source-of-truth companion docs. |
 | `pyproject.toml` | Python package metadata, Python `>=3.14`, runtime dependencies and tool configuration. |
 
+```mermaid
+flowchart TB
+    Repo["Repository"]
+
+    Repo --> Backend["src/enterprise_ai_tool_gateway/"]
+    Repo --> Frontend["frontend/"]
+    Repo --> Tests["tests/"]
+    Repo --> Scripts["scripts/"]
+    Repo --> Docs["docs/"]
+
+    Backend --> API["api/http<br/>FastAPI adapter"]
+    Backend --> App["application<br/>workflow runtimes"]
+    Backend --> Contracts["contracts<br/>shared enums and schemas"]
+    Backend --> Domain["access / procurement / maintenance_lite<br/>synthetic workflow packages"]
+    Backend --> Control["policy / approval / tools / audit<br/>control boundaries"]
+    Backend --> DB["db<br/>SQLAlchemy models and repository"]
+    Backend --> Provider["llm / mcp<br/>provider and MCP boundaries"]
+    Backend --> Evals["evals<br/>acceptance cases and runner logic"]
+
+    Frontend --> FEApi["src/api<br/>/api/v1 HTTP client"]
+    Frontend --> Pages["src/pages<br/>route-level screens"]
+    Frontend --> Features["src/features<br/>workflow/run/approval/audit modules"]
+    Frontend --> Components["src/components<br/>shared UI building blocks"]
+    Frontend --> State["src/state<br/>local known-run index"]
+    Frontend --> Styles["src/styles<br/>tokens and global CSS"]
+
+    Scripts --> RunEval["run_eval.py<br/>deterministic acceptance runner"]
+    Scripts --> DemoRunner["demo runner scripts<br/>local Windows launcher"]
+
+    Docs --> PublicDocs["final public docs<br/>context / architecture / API / demo / development"]
+    Tests --> TestAreas["contracts / runtimes / API / audit / evals / providers"]
+
+    API -. "calls into" .-> App
+    App -. "uses" .-> Contracts
+    App -. "uses" .-> Control
+    App -. "persists through" .-> DB
+    App -. "validates provider output from" .-> Provider
+    FEApi -. "HTTP only" .-> API
+```
+
 ## 2. Backend package map
 
 Main backend packages under `src/enterprise_ai_tool_gateway/`:
