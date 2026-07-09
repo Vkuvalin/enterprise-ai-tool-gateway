@@ -1,9 +1,3 @@
-# Private Codex
-AGENTS.md
-.agents/
-.codex/
-docs/codex/
-
 # Local secrets
 .env
 .env.*
