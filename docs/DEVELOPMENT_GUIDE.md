@@ -1,48 +1,36 @@
-# Development Guide
+# Руководство по разработке
 
-## 1. Purpose
+## 1. Назначение
 
-This guide explains how to develop, validate and safely change the frozen local
-prototype. It is a practical checklist for running the backend, running the
-frontend, executing deterministic evals, collecting review diffs and preserving
-the project boundaries that make the gateway safe to inspect.
+Это руководство объясняет, как разрабатывать, валидировать и безопасно изменять замороженный локальный прототип. Это практический checklist для запуска backend, запуска frontend, выполнения детерминированных evals, сбора review diffs и сохранения границ проекта, которые делают gateway безопасным для инспекции.
 
-The prototype is local/demo software. It demonstrates backend-controlled
-LLM-proposed tool execution for synthetic access, procurement and maintenance
-workflows. It is not a production deployment guide.
+Прототип является local/demo software. Он демонстрирует backend-controlled выполнение инструментов, предложенных LLM, для синтетических workflows access, procurement и maintenance. Это не руководство по production deployment.
 
 ## 2. Prerequisites
 
-Required local tools:
+Необходимые локальные tools:
 
-* Python compatible with the project requirement in `pyproject.toml`. The
-  current project requirement is Python `>=3.14`.
-* `uv` for Python dependency management and command execution.
-* Node.js and npm for the React/Vite frontend.
-* A local checkout of this repository.
+* Python, совместимый с требованием проекта в `pyproject.toml`. Текущее требование проекта — Python `>=3.14`.
+* `uv` для управления Python dependencies и выполнения команд.
+* Node.js и npm для React/Vite frontend.
+* Локальная checkout-копия этого repository.
 
-Default validation and demo runs do not require real provider credentials. The
-default provider path is deterministic mock/fake provider behavior, and default
-tests/evals must not call real providers or external enterprise systems.
+Default validation и demo runs не требуют real provider credentials. Default provider path — это deterministic mock/fake provider behavior, а default tests/evals не должны вызывать real providers или external enterprise systems.
 
 Windows notes:
 
-* Run commands from the repository root unless a section says to use
-  `frontend/`.
-* For the fastest local demo start, run `run_demo.cmd` from the repository
-  root. It starts the backend and frontend, writes logs under `.runtime/logs/`
-  and opens `http://127.0.0.1:5173/dashboard`.
-* If `npm` is installed but not on `PATH`, use the full npm executable path:
+* Запускайте команды из корня repository, если раздел явно не требует использовать `frontend/`.
+* Для самого быстрого local demo start запустите `run_demo.cmd` из корня repository. Он запускает backend и frontend, пишет logs в `.runtime/logs/` и открывает `http://127.0.0.1:5173/dashboard`.
+* Если `npm` установлен, но отсутствует в `PATH`, используйте полный путь к npm executable:
   `C:\Program Files\nodejs\npm.cmd`.
 
 ### Windows demo runner
 
-`run_demo.cmd` is a local convenience wrapper around
-`scripts/demo/run_demo.ps1`. It starts the FastAPI backend on
-`127.0.0.1:8000` and the Vite frontend on `127.0.0.1:5173` only when those
-services are not already healthy/reachable.
+`run_demo.cmd` — это локальный convenience wrapper вокруг
+`scripts/demo/run_demo.ps1`. Он запускает FastAPI backend на
+`127.0.0.1:8000` и Vite frontend на `127.0.0.1:5173` только если эти services ещё не healthy/reachable.
 
-Runtime files are local artifacts under `.runtime/`:
+Runtime files являются локальными artifacts в `.runtime/`:
 
 ```text
 .runtime/demo-backend.pid
@@ -51,67 +39,62 @@ Runtime files are local artifacts under `.runtime/`:
 .runtime/logs/frontend.log
 ```
 
-Press `Q` in the controlling PowerShell window to stop only the processes
-started by that runner window. To stop a previous runner-owned demo, run:
+Нажмите `Q` в controlling PowerShell window, чтобы остановить только процессы, запущенные этим runner window. Чтобы остановить предыдущий runner-owned demo, выполните:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1
 ```
 
-The stop script reads only the runner PID files and does not kill unrelated
-Python, Node.js, npm, uvicorn or Vite processes.
+Stop script читает только runner PID files и не завершает unrelated процессы Python, Node.js, npm, uvicorn или Vite.
 
 ## 3. Backend setup and run
 
-From the repository root, start the FastAPI backend:
+Из корня repository запустите FastAPI backend:
 
 ```bash
 uv run uvicorn enterprise_ai_tool_gateway.api.http.app:app --reload
 ```
 
-The API is versioned under `/api/v1`. Use these health checks:
+API версионирован под `/api/v1`. Используйте эти health checks:
 
 ```text
 http://127.0.0.1:8000/api/v1/health
 http://127.0.0.1:8000/api/v1/capabilities
 ```
 
-The backend root may return 404:
+Backend root может возвращать 404:
 
 ```text
 http://127.0.0.1:8000/
 ```
 
-That is normal. The backend serves the API, not the frontend root page.
+Это нормально. Backend обслуживает API, а не frontend root page.
 
-By default, the local app creates a SQLite database under `data/`. Local
-database files are runtime artifacts and must not be committed.
+По умолчанию local app создаёт SQLite database в `data/`. Local database files являются runtime artifacts и не должны коммититься.
 
 ## 4. Frontend setup and run
 
-In a second terminal, install frontend dependencies if needed:
+Во втором терминале при необходимости установите frontend dependencies:
 
 ```bash
 cd frontend
 npm install
 ```
 
-Start the Vite dev server on the documented local address:
+Запустите Vite dev server на документированном local address:
 
 ```bash
 cd frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Open the main UI:
+Откройте основной UI:
 
 ```text
 http://127.0.0.1:5173/dashboard
 ```
 
-The frontend API client uses `/api/v1` by default. The Vite dev server proxies
-`/api` to `http://localhost:8000`, so the backend should be running on port
-8000 before using the UI.
+Frontend API client по умолчанию использует `/api/v1`. Vite dev server проксирует `/api` на `http://localhost:8000`, поэтому backend должен быть запущен на порту 8000 перед использованием UI.
 
 Windows npm fallback:
 
@@ -119,7 +102,7 @@ Windows npm fallback:
 C:\Program Files\nodejs\npm.cmd
 ```
 
-Example:
+Пример:
 
 ```powershell
 cd frontend
@@ -128,7 +111,7 @@ cd frontend
 
 ## 5. Backend validation
 
-Run routine backend validation from the repository root:
+Запустите routine backend validation из корня repository:
 
 ```bash
 uv run pytest
@@ -137,33 +120,26 @@ uv run pyright
 git diff --check
 ```
 
-The exact test count can change as the prototype evolves, so do not hardcode an
-expected count in docs or task handoffs unless the repository establishes a
-specific convention for that moment.
+Точное количество tests может меняться по мере развития прототипа, поэтому не hardcode expected count в docs или task handoffs, если repository не устанавливает конкретную convention для текущего момента.
 
-Default backend validation must remain deterministic and offline. It must not
-require real provider credentials, network access or real enterprise systems.
+Default backend validation должна оставаться deterministic и offline. Она не должна требовать real provider credentials, network access или real enterprise systems.
 
 ## 6. Eval validation
 
-Run the deterministic API acceptance evals:
+Запустите deterministic API acceptance evals:
 
 ```bash
 uv run python scripts/run_eval.py
 uv run python scripts/run_eval.py --format json
 ```
 
-The eval runner exercises the public `/api/v1` API surface with deterministic
-providers and isolated local SQLite state. It is acceptance validation for the
-gateway lifecycle: controlled statuses, approval gating, readback endpoints,
-audit events, reason codes and failed-validation handling.
+Eval runner проверяет public API surface `/api/v1` с deterministic providers и isolated local SQLite state. Это acceptance validation для gateway lifecycle: controlled statuses, approval gating, readback endpoints, audit events, reason codes и failed-validation handling.
 
-The evals use the default mock/static provider path. They perform no real
-provider calls, no external network calls and no real connector calls.
+Evals используют default mock/static provider path. Они не выполняют real provider calls, external network calls и real connector calls.
 
 ## 7. Frontend validation
 
-Run frontend validation from `frontend/`:
+Запустите frontend validation из `frontend/`:
 
 ```bash
 cd frontend
@@ -171,27 +147,24 @@ npm run typecheck
 npm run build
 ```
 
-There is no full frontend E2E harness in the current prototype. Before
-demo-facing frontend changes are accepted, run a manual browser smoke over the
-main routes and workflows.
+В текущем прототипе нет full frontend E2E harness. Перед принятием demo-facing frontend changes выполните manual browser smoke по основным routes и workflows.
 
 ## 8. Manual smoke checklist
 
-With the backend and frontend running, check the main routes:
+При запущенных backend и frontend проверьте основные routes:
 
 * `/dashboard`
 * `/workflows`
 * `/runs`
 * `/settings`
 
-Then run the main workflow paths:
+Затем пройдите основные workflow paths:
 
-* Access submit with the documented known-good access values.
-* Procurement approval path, including pending approval and approval
-  resolution.
-* Maintenance default/safe path with known-good low-severity values.
+* Access submit с документированными known-good access values.
+* Procurement approval path, включая pending approval и approval resolution.
+* Maintenance default/safe path с known-good low-severity values.
 
-For a created run, inspect:
+Для созданного run проверьте:
 
 * `/runs/{run_id}`
 * `/runs/{run_id}/approvals`
@@ -200,23 +173,21 @@ For a created run, inspect:
 
 Smoke expectations:
 
-* no blank screen;
-* API status is healthy;
-* provider mode is `mock`;
-* model selection is disabled;
-* controlled statuses render safely, including `COMPLETED`,
+* нет blank screen;
+* API status healthy;
+* provider mode — `mock`;
+* model selection disabled;
+* controlled statuses безопасно отображаются, включая `COMPLETED`,
   `WAITING_FOR_APPROVAL`, `NEEDS_USER_INPUT`, `NEEDS_MANUAL_REVIEW`,
-  `REJECTED`, `FAILED_VALIDATION`, `FAILED_TOOL` and `FAILED_PROVIDER`;
-* approval-required workflows do not show a completed draft before approval;
-* run-scoped tool calls and audit records are visible.
+  `REJECTED`, `FAILED_VALIDATION`, `FAILED_TOOL` и `FAILED_PROVIDER`;
+* approval-required workflows не показывают completed draft до approval;
+* run-scoped tool calls и audit records видимы.
 
 ## 9. Diff and review workflow
 
-For review loops, use a staged-baseline workflow when it helps separate already
-accepted changes from later fix-loop edits. Do not commit during this workflow
-unless the task explicitly asks for a commit.
+Для review loops используйте staged-baseline workflow, когда это помогает отделить уже принятые changes от последующих fix-loop edits. Не делайте commit во время этого workflow, если task явно не просит commit.
 
-Before the fix-loop, stage the accepted baseline without committing:
+Перед fix-loop добавьте accepted baseline в staged без commit:
 
 ```powershell
 git status --short --untracked-files=all
@@ -224,42 +195,36 @@ git add <accepted-files>
 git -c core.quotepath=false diff --cached --output=accepted-baseline.diff
 ```
 
-After fix-loop edits, collect the unstaged delta:
+После fix-loop edits соберите unstaged delta:
 
 ```powershell
 git -c core.quotepath=false diff --output=fix-loop-delta.diff
 git diff --check
 ```
 
-Review the delta. If the fix-loop changes are accepted, update the staged
-baseline intentionally:
+Проверьте delta. Если fix-loop changes приняты, намеренно обновите staged baseline:
 
 ```powershell
 git add <accepted-fix-files>
 git -c core.quotepath=false diff --cached --output=accepted-baseline.diff
 ```
 
-Prefer `git diff --output=...` over PowerShell `Out-File` for patch/diff files.
-It avoids accidental encoding changes that make review artifacts harder to
-apply or compare.
+Предпочитайте `git diff --output=...` вместо PowerShell `Out-File` для patch/diff files. Это позволяет избежать случайных encoding changes, из-за которых review artifacts сложнее apply или compare.
 
-Keep review diffs focused. Do not mix unrelated cleanup, generated output,
-local cache changes or unrelated documentation edits into the same review set.
+Держите review diffs сфокусированными. Не смешивайте unrelated cleanup, generated output, local cache changes или unrelated documentation edits в одном review set.
 
 ## 10. Repo hygiene
 
-Do not commit local dependency, build, cache, secret or review artifacts:
+Не коммитьте local dependency, build, cache, secret или review artifacts:
 
 * `frontend/node_modules/`
 * `frontend/dist/`
 * `frontend/.vite/`
-* `.env` or secret-bearing files
-* local SQLite databases, logs and runtime data
-* temporary task/report/plan/diff artifacts under `docs/codex/` or other
-  ignored working directories
+* `.env` или secret-bearing files
+* local SQLite databases, logs и runtime data
+* temporary task/report/plan/diff artifacts в `docs/codex/` или других ignored working directories
 
-Keep generated reports and diffs out of final commits unless a task explicitly
-requires a committed artifact. Before committing any change, inspect:
+Держите generated reports и diffs вне final commits, если task явно не требует committed artifact. Перед commit любых изменений проверьте:
 
 ```bash
 git status --short --untracked-files=all
@@ -268,77 +233,63 @@ git diff --check
 
 ## 11. Boundary rules for changes
 
-Preserve these boundaries when changing the prototype:
+Сохраняйте эти boundaries при изменении прототипа:
 
-* Frontend code must call the backend only through `/api/v1`.
-* Frontend code must not import backend Python internals.
-* API routes must remain thin adapters over application runtimes.
-* Application runtimes own orchestration, workflow decisions and approval
-  resolution behavior.
-* The backend owns provider-output validation, tool execution, policy checks,
-  approval gates, audit creation and persistence coordination.
-* Provider output is untrusted until backend schema and runtime validation
-  accept it.
-* Tool execution must go through `ToolRegistry` / `ToolExecutor` or an explicit
-  MCP/MCP-like boundary.
-* Unknown, disallowed or unregistered tool proposals must fail validation.
-* State-changing tools require policy checks.
-* Risky or approval-required state-changing tools require approval before draft
-  execution.
-* Public API responses must use safe projection/redaction for tool payloads,
-  approval free-text fields and audit payloads.
-* Default tests and evals must not make real provider or external network
-  calls.
+* Frontend code должен обращаться к backend только через `/api/v1`.
+* Frontend code не должен импортировать backend Python internals.
+* API routes должны оставаться thin adapters поверх application runtimes.
+* Application runtimes владеют orchestration, workflow decisions и approval resolution behavior.
+* Backend владеет provider-output validation, tool execution, policy checks,
+  approval gates, audit creation и persistence coordination.
+* Provider output считается недоверенным, пока backend schema и runtime validation не примут его.
+* Tool execution должно проходить через `ToolRegistry` / `ToolExecutor` или explicit MCP/MCP-like boundary.
+* Unknown, disallowed или unregistered tool proposals должны завершаться validation failure.
+* State-changing tools требуют policy checks.
+* Risky или approval-required state-changing tools требуют approval перед draft execution.
+* Public API responses должны использовать safe projection/redaction для tool payloads,
+  approval free-text fields и audit payloads.
+* Default tests и evals не должны выполнять real provider или external network calls.
 
 ## 12. Common troubleshooting
 
-`npm` is not in `PATH`:
+`npm` отсутствует в `PATH`:
 
-Use the full Windows executable path:
+Используйте полный путь к Windows executable:
 
 ```text
 C:\Program Files\nodejs\npm.cmd
 ```
 
-Backend root `/` returns 404:
+Backend root `/` возвращает 404:
 
-Use `/api/v1/health`, `/api/v1/capabilities` or the frontend dashboard. A 404
-from `/` is normal.
+Используйте `/api/v1/health`, `/api/v1/capabilities` или frontend dashboard. 404 от `/` — это нормально.
 
-Frontend cannot reach the API:
+Frontend не может достучаться до API:
 
-Make sure the backend is running on port 8000. The frontend calls `/api/v1`,
-and Vite proxies `/api` to `http://localhost:8000`.
+Убедитесь, что backend запущен на порту 8000. Frontend вызывает `/api/v1`, а Vite проксирует `/api` на `http://localhost:8000`.
 
 Vite port conflict:
 
-Use the documented explicit port when possible:
+По возможности используйте документированный explicit port:
 
 ```bash
 cd frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-If another process already owns the port, stop that process or choose another
-local port and open the URL Vite prints.
+Если другой process уже занимает port, остановите этот process или выберите другой local port и откройте URL, который напечатает Vite.
 
 CRLF/LF Git warnings:
 
-Check the diff before committing. Line-ending warnings are usually a local Git
-configuration issue, but the final diff should stay readable and should not
-include unrelated whole-file churn.
+Проверьте diff перед commit. Line-ending warnings обычно связаны с local Git configuration, но final diff должен оставаться readable и не должен включать unrelated whole-file churn.
 
-Maintenance returns `FAILED_TOOL` for arbitrary non-default input:
+Maintenance возвращает `FAILED_TOOL` для arbitrary non-default input:
 
-Treat it as a controlled backend failure state. Use the documented known-good
-maintenance values for the default/safe smoke path, then inspect the run detail,
-tool calls and audit trail.
+Считайте это controlled backend failure state. Используйте documented known-good maintenance values для default/safe smoke path, затем проверьте run detail, tool calls и audit trail.
 
-FastAPI or Starlette `TestClient` warning:
+FastAPI или Starlette `TestClient` warning:
 
-If pytest emits a `TestClient` warning while tests still pass, record it in the
-handoff as a dependency/tooling warning. Do not treat it as a real-provider or
-connector failure, and do not mask failing tests.
+Если pytest выводит `TestClient` warning, но tests всё ещё проходят, зафиксируйте это в handoff как dependency/tooling warning. Не считайте это real-provider или connector failure и не маскируйте failing tests.
 
 ## 13. Related documents
 
@@ -351,5 +302,4 @@ Related source-of-truth and companion documents:
 * [DEMO_WALKTHROUGH.md](DEMO_WALKTHROUGH.md)
 * [README.md](../README.md)
 
-`README.md` is the public quickstart. If it is rewritten later, keep its
-commands aligned with this guide and the current repository entrypoints.
+`README.md` — это public quickstart. Если он будет переписан позже, держите его commands согласованными с этим guide и текущими repository entrypoints.

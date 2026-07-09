@@ -1,26 +1,21 @@
 # Enterprise AI Tool Gateway
 
-## 1. What this is
+## 1. Что это
 
-Enterprise AI Tool Gateway is a local/demo prototype of controlled LLM tool
-execution for synthetic enterprise workflows: the model proposes structured
-decisions, the backend validates them, tools execute only through controlled
-backend boundaries, approval gates risky actions, audit records lifecycle
-evidence, and the web UI displays the controlled lifecycle through `/api/v1`.
+Enterprise AI Tool Gateway — это локальный/demo-прототип контролируемого выполнения инструментов LLM для синтетических enterprise workflows: модель предлагает structured decisions, backend валидирует их, tools выполняются только через controlled backend boundaries, approval ограничивает risky actions, audit фиксирует lifecycle evidence, а web UI отображает controlled lifecycle через `/api/v1`.
 
-This is not a chatbot, not autonomous direct tool use by an LLM, and not a
-production SaaS platform.
+Это не chatbot, не автономное прямое использование tools со стороны LLM и не production SaaS platform.
 
-## 2. What this demonstrates
+## 2. Что это демонстрирует
 
-* Controlled gateway lifecycle from workflow submission to final run status.
-* Synthetic enterprise workflows for access, procurement and maintenance.
-* FastAPI backend with versioned `/api/v1` endpoints.
-* React/Vite frontend as a local web console over the API.
-* Deterministic eval suite for backend/API acceptance behavior.
-* Public redaction/projection boundary for run, tool, approval and audit data.
+* Controlled gateway lifecycle от workflow submission до final run status.
+* Синтетические enterprise workflows для access, procurement и maintenance.
+* FastAPI backend с версионированными endpoints `/api/v1`.
+* React/Vite frontend как локальная web console поверх API.
+* Deterministic eval suite для backend/API acceptance behavior.
+* Public redaction/projection boundary для run, tool, approval и audit data.
 
-## 3. Architecture at a glance
+## 3. Архитектура в общих чертах
 
 ```mermaid
 flowchart LR
@@ -37,42 +32,39 @@ flowchart LR
     DB --> Readback --> Display
 ```
 
-The backend owns workflow decisions. The frontend submits demo requests,
-resolves approvals through the API and displays backend-controlled readback.
+Backend владеет workflow decisions. Frontend отправляет demo requests, resolves approvals через API и отображает backend-controlled readback.
 
-## 4. Current capabilities
+## 4. Текущие возможности
 
-Implemented capabilities:
+Реализованные capabilities:
 
 * `ACCESS_REQUEST`;
 * `PROCUREMENT_REQUEST`;
 * `MAINTENANCE_REQUEST`;
-* approval flow for risky state-changing draft actions;
-* run detail and run-scoped readback;
-* registered tool calls with safe public projection;
-* audit trail for lifecycle events;
+* approval flow для risky state-changing draft actions;
+* run detail и run-scoped readback;
+* registered tool calls с safe public projection;
+* audit trail для lifecycle events;
 * deterministic eval runner;
 * local web console.
 
 ## 5. Quickstart
 
-Quick demo runner for Windows:
+Быстрый demo runner для Windows:
 
 ```text
 run_demo.cmd
 ```
 
-The runner starts the local backend and frontend, opens the dashboard and keeps
-one controlling PowerShell window open. The manual commands below remain
-available when you want separate terminals.
+Runner запускает локальные backend и frontend, открывает dashboard и оставляет одно управляющее PowerShell window открытым. Manual commands ниже остаются доступны, когда нужны отдельные терминалы.
 
-Start the backend from the repository root:
+Запустить backend из корня repository:
 
 ```bash
 uv run uvicorn enterprise_ai_tool_gateway.api.http.app:app --reload
 ```
 
-Start the frontend in a second terminal:
+Запустить frontend во втором терминале:
 
 ```bash
 cd frontend
@@ -80,7 +72,7 @@ npm install
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Open:
+Открыть:
 
 ```text
 http://127.0.0.1:5173/dashboard
@@ -88,8 +80,7 @@ http://127.0.0.1:8000/api/v1/health
 http://127.0.0.1:8000/api/v1/capabilities
 ```
 
-The backend root `/` may return 404. That is normal; the backend serves the
-versioned API, while the frontend is served by Vite.
+Backend root `/` может возвращать 404. Это нормально: backend обслуживает версионированный API, а frontend обслуживается через Vite.
 
 ## 6. Validation
 
@@ -111,47 +102,42 @@ npm run typecheck
 npm run build
 ```
 
-Default validation uses deterministic mock/static provider paths. No real
-provider credentials are required.
+Default validation использует deterministic mock/static provider paths. Real provider credentials не требуются.
 
 ## 7. Demo walkthrough
 
-Use [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md) for the guided local
-demo. It covers the Access happy path, Procurement approval path, Maintenance
-default/safe path, Run Detail, Tool Calls, Audit Trail and the eval runner.
+Используйте [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md) для guided local demo. Он покрывает Access happy path, Procurement approval path, Maintenance default/safe path, Run Detail, Tool Calls, Audit Trail и eval runner.
 
-## 8. Documentation map
+## 8. Карта документации
 
 * [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) - current prototype scope,
-  implemented workflows, safety status and intentional non-goals.
+  implemented workflows, safety status и intentional non-goals.
 * [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - system architecture, request
-  lifecycle, tool boundary, approval boundary, audit/redaction model and
+  lifecycle, tool boundary, approval boundary, audit/redaction model и
   limitations.
 * [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) - repository structure, package
-  ownership, entrypoints and boundary rules.
+  ownership, entrypoints и boundary rules.
 * [docs/API_AND_EVALS.md](docs/API_AND_EVALS.md) - public API surface,
-  controlled outcomes, redaction behavior and deterministic eval suite.
+  controlled outcomes, redaction behavior и deterministic eval suite.
 * [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md) - step-by-step local
-  demo scenarios for the backend and frontend.
+  demo scenarios для backend и frontend.
 * [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) - local setup,
-  validation commands, smoke checks and safe development workflow.
+  validation commands, smoke checks и safe development workflow.
 
-## 9. Known limitations
+## 9. Известные ограничения
 
-* Local/demo only.
-* Mock provider path by default.
+* Только local/demo.
+* Mock provider path по умолчанию.
 * Synthetic workflow data.
-* No authentication, RBAC or tenants.
-* No real enterprise connectors.
-* No provider/model selection.
-* No deployment, hosting or payment support.
-* No production security hardening.
-* Frontend uses a browser-local known-run index, not a global backend listing.
+* Нет authentication, RBAC или tenants.
+* Нет real enterprise connectors.
+* Нет provider/model selection.
+* Нет deployment, hosting или payment support.
+* Нет production security hardening.
+* Frontend использует browser-local known-run index, а не global backend listing.
 
-## 10. Status
+## 10. Статус
 
-This repository represents the current frozen local/demo prototype. The
-implementation is feature-complete for the documented demo scope, and future
-ideas should be treated as backlog rather than implemented capabilities.
+Этот repository представляет текущий frozen local/demo prototype. Реализация feature-complete для documented demo scope, а future ideas должны рассматриваться как backlog, а не implemented capabilities.
 
-Use the public docs in `docs/` as the current source of truth.
+Используйте public docs в `docs/` как текущий source of truth.

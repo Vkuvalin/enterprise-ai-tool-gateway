@@ -1,11 +1,10 @@
-# Project Context
+# Контекст проекта
 
-## 1. Project thesis
+## 1. Тезис проекта
 
-Enterprise AI Tool Gateway is a local/demo prototype of controlled LLM tool
-execution for synthetic enterprise workflows.
+Enterprise AI Tool Gateway — это локальный/demo-прототип контролируемого выполнения инструментов LLM для синтетических enterprise-workflows.
 
-The core claim is simple:
+Ключевой тезис простой:
 
 ```text
 LLM proposes.
@@ -16,24 +15,22 @@ Audit records meaningful lifecycle events.
 Frontend displays the controlled workflow through /api/v1.
 ```
 
-The project is not a chatbot and not a production SaaS product. It demonstrates
-how backend-owned contracts, policy checks, approval gates, tool boundaries and
-audit records can govern LLM-proposed actions.
+Проект не является чат-ботом и не является production SaaS-продуктом. Он демонстрирует, как backend-owned contracts, policy checks, approval gates, tool boundaries и audit records могут управлять действиями, предложенными LLM.
 
-## 2. What this prototype demonstrates
+## 2. Что демонстрирует этот прототип
 
-The prototype demonstrates an engineering pattern for governed LLM tool use:
+Прототип демонстрирует инженерный паттерн для управляемого использования LLM-инструментов:
 
-* controlled LLM tool execution through backend-owned runtime logic;
-* strict validation of structured provider decisions before tool execution;
-* registered tool execution through `ToolRegistry` and `ToolExecutor`;
-* policy checks before state-changing draft actions;
-* approval control for risky actions before those actions execute;
-* run-scoped visibility into tool calls, approvals and audit events;
-* separation between the FastAPI `/api/v1` backend and the React/Vite frontend;
-* deterministic, offline acceptance testing over the API surface.
+* контролируемое выполнение инструментов LLM через runtime-логику, принадлежащую backend;
+* строгую валидацию структурированных решений provider перед выполнением инструментов;
+* зарегистрированное выполнение инструментов через `ToolRegistry` и `ToolExecutor`;
+* policy checks перед state-changing draft actions;
+* approval control для рискованных действий до их выполнения;
+* видимость tool calls, approvals и audit events в рамках конкретного run;
+* разделение между FastAPI backend `/api/v1` и React/Vite frontend;
+* детерминированное offline acceptance-тестирование поверх API surface.
 
-The primary lifecycle is:
+Основной жизненный цикл:
 
 ```text
 request
@@ -48,110 +45,100 @@ request
 -> final run outcome
 ```
 
-## 3. Current frozen prototype state
+## 3. Текущее замороженное состояние прототипа
 
-Implemented layers:
+Реализованные слои:
 
-* Backend: Python package under `src/enterprise_ai_tool_gateway/`.
-* API: FastAPI adapter versioned under `/api/v1`.
-* Workflows: three synthetic enterprise workflows:
-  `ACCESS_REQUEST`, `PROCUREMENT_REQUEST` and `MAINTENANCE_REQUEST`.
-* Frontend: independent React + TypeScript + Vite client under `frontend/`.
-* Evals: deterministic acceptance runner with a 21-case suite.
-* Persistence: local SQLite persistence through async SQLAlchemy.
-* Provider mode: deterministic mock/fake provider path by default.
+* Backend: Python-пакет в `src/enterprise_ai_tool_gateway/`.
+* API: FastAPI adapter, версионированный под `/api/v1`.
+* Workflows: три синтетических enterprise-workflows:
+  `ACCESS_REQUEST`, `PROCUREMENT_REQUEST` и `MAINTENANCE_REQUEST`.
+* Frontend: независимый React + TypeScript + Vite client в `frontend/`.
+* Evals: детерминированный acceptance runner с набором из 21 кейса.
+* Persistence: локальное SQLite-хранилище через async SQLAlchemy.
+* Provider mode: по умолчанию используется детерминированный mock/fake provider path.
 
-Implemented backend areas include contracts, workflow transitions, provider
-ports, tool registry/executor, policy decisions, approval primitives, audit
-redaction/events, persistence, application runtimes, FastAPI routes and evals.
+Реализованные backend-области включают contracts, workflow transitions, provider ports, tool registry/executor, policy decisions, approval primitives, audit redaction/events, persistence, application runtimes, FastAPI routes и evals.
 
-Implemented frontend areas include a dashboard, workflow submission pages,
-agent run views, run-scoped approvals, tool calls, audit trail, settings, API
-status and a local known-run index.
+Реализованные frontend-области включают dashboard, страницы отправки workflow, представления agent run, approvals в рамках run, tool calls, audit trail, settings, API status и локальный known-run index.
 
-## 4. Implemented workflows
+## 4. Реализованные workflows
 
 ### ACCESS_REQUEST
 
-Purpose: demonstrate an access-control request through a controlled gateway.
+Назначение: продемонстрировать запрос на управление доступом через контролируемый gateway.
 
-What it demonstrates:
+Что демонстрирует:
 
-* employee, system, access-policy and existing-ticket read checks;
-* backend validation of the provider decision and allowed access tools;
-* policy decisions before creating an access request draft;
-* approval for high-risk access changes, such as admin access;
-* safe rejection or manual review when synthetic policy/data checks fail.
+* read checks для employee, system, access-policy и existing-ticket;
+* backend-валидацию provider decision и разрешённых access tools;
+* policy decisions перед созданием access request draft;
+* approval для высокорискованных изменений доступа, например admin access;
+* безопасное отклонение или manual review, когда synthetic policy/data checks не проходят.
 
-Possible controlled outcomes:
+Возможные контролируемые outcomes:
 
-* completed synthetic access request draft;
-* waiting for approval, then completed or rejected after approval resolution;
-* needs user input for missing required fields;
-* needs manual review for unverifiable data or duplicate/open-ticket risks;
+* завершённый synthetic access request draft;
+* ожидание approval, затем завершение или отклонение после approval resolution;
+* needs user input для отсутствующих обязательных полей;
+* needs manual review для непроверяемых данных или рисков duplicate/open-ticket;
 * rejected by policy;
-* failed validation for invalid provider output or unknown tool proposals.
+* failed validation для невалидного provider output или неизвестных tool proposals.
 
-This is not a real IAM integration.
+Это не реальная IAM-интеграция.
 
 ### PROCUREMENT_REQUEST
 
-Purpose: demonstrate spend/vendor/budget control through the same gateway
-pattern.
+Назначение: продемонстрировать контроль расходов, поставщиков и бюджета через тот же gateway-паттерн.
 
-What it demonstrates:
+Что демонстрирует:
 
-* synthetic requester, vendor, catalog item, budget/policy and duplicate-request
-  checks;
-* backend validation of procurement request type, domain template and tool names;
-* policy control before creating a purchase request draft;
-* approval for high-value or approval-required draft actions;
-* manual review or rejection for blocked vendors, restricted items, budget
-  issues, duplicates or missing synthetic data.
+* synthetic checks для requester, vendor, catalog item, budget/policy и duplicate-request;
+* backend-валидацию procurement request type, domain template и tool names;
+* policy control перед созданием purchase request draft;
+* approval для high-value или approval-required draft actions;
+* manual review или rejection для blocked vendors, restricted items, budget issues, duplicates или отсутствующих synthetic data.
 
-Possible controlled outcomes:
+Возможные контролируемые outcomes:
 
-* completed synthetic purchase request draft;
-* waiting for approval, then completed or rejected after approval resolution;
-* needs user input for missing required fields;
-* needs manual review for synthetic data/policy uncertainty;
+* завершённый synthetic purchase request draft;
+* ожидание approval, затем завершение или отклонение после approval resolution;
+* needs user input для отсутствующих обязательных полей;
+* needs manual review при неопределённости synthetic data/policy;
 * rejected by policy;
-* failed validation for invalid provider output or unknown tool proposals.
+* failed validation для невалидного provider output или неизвестных tool proposals.
 
-This is not a real procurement, ERP, vendor or tender workflow.
+Это не реальный procurement, ERP, vendor или tender workflow.
 
 ### MAINTENANCE_REQUEST
 
-Purpose: demonstrate asset/severity/safety control through a lightweight
-maintenance workflow.
+Назначение: продемонстрировать контроль asset/severity/safety через облегчённый maintenance workflow.
 
-What it demonstrates:
+Что демонстрирует:
 
-* synthetic requester, asset, severity classification, duplicate-ticket and
-  maintenance-policy checks;
-* canonical `MaintenanceSeverity` handling with uppercase enum values;
-* backend validation of maintenance request type, domain template and tool names;
-* policy control before creating a work order draft;
-* approval for high-severity work order drafts;
-* manual review or rejection for safety concerns, critical/manual-review cases
-  or forbidden maintenance instructions.
+* synthetic checks для requester, asset, severity classification, duplicate-ticket и maintenance-policy;
+* canonical `MaintenanceSeverity` handling с uppercase enum values;
+* backend-валидацию maintenance request type, domain template и tool names;
+* policy control перед созданием work order draft;
+* approval для high-severity work order drafts;
+* manual review или rejection для safety concerns, critical/manual-review cases или forbidden maintenance instructions.
 
-Possible controlled outcomes:
+Возможные контролируемые outcomes:
 
-* completed synthetic work order draft;
-* waiting for approval, then completed or rejected after approval resolution;
-* needs user input for missing required fields;
-* needs manual review for safety or synthetic data/policy uncertainty;
+* завершённый synthetic work order draft;
+* ожидание approval, затем завершение или отклонение после approval resolution;
+* needs user input для отсутствующих обязательных полей;
+* needs manual review для safety или неопределённости synthetic data/policy;
 * rejected by policy;
-* failed validation for invalid provider output or unknown tool proposals.
+* failed validation для невалидного provider output или неизвестных tool proposals.
 
-This is not a real CMMS, EAM or maintenance/TOIR integration.
+Это не реальная интеграция с CMMS, EAM или maintenance/TOIR.
 
-## 5. Backend/API status
+## 5. Статус Backend/API
 
-The backend exposes a local/demo FastAPI API under `/api/v1`.
+Backend предоставляет локальный/demo FastAPI API под `/api/v1`.
 
-Implemented endpoint groups:
+Реализованные группы endpoint:
 
 * `GET /api/v1/health`;
 * `GET /api/v1/capabilities`;
@@ -164,50 +151,37 @@ Implemented endpoint groups:
 * `GET /api/v1/runs/{run_id}/approvals`;
 * `GET /api/v1/runs/{run_id}/audit-events`.
 
-Business outcomes are modeled as controlled run statuses, not as generic HTTP
-failures. For example, rejected, manual-review, user-input and failed-validation
-outcomes can return HTTP 200 with a run status that explains the controlled
-stop. HTTP errors are still used for malformed request bodies, unknown run or
-approval IDs, invalid approval decisions and state conflicts.
+Business outcomes моделируются как controlled run statuses, а не как generic HTTP failures. Например, outcomes rejected, manual-review, user-input и failed-validation могут возвращать HTTP 200 со статусом run, который объясняет controlled stop. HTTP errors всё ещё используются для malformed request bodies, unknown run или approval IDs, invalid approval decisions и state conflicts.
 
-Public API responses use a redacted projection for tool payloads and approval
-free-text fields. Backend runtime objects may contain more internal detail than
-the public response DTOs expose.
+Public API responses используют redacted projection для tool payloads и approval free-text fields. Backend runtime objects могут содержать больше внутренних деталей, чем раскрывают public response DTOs.
 
-## 6. Frontend status
+## 6. Статус Frontend
 
-The frontend is an independent React/Vite client under `frontend/`. It talks to
-the backend only through the `/api/v1` HTTP API client in `frontend/src/api/`.
+Frontend — это независимый React/Vite client в `frontend/`. Он взаимодействует с backend только через `/api/v1` HTTP API client в `frontend/src/api/`.
 
-The UI is best understood as a local Gateway Operations Console. It includes:
+UI лучше всего понимать как локальную Gateway Operations Console. Она включает:
 
 * Dashboard;
 * Workflows;
-* workflow submit pages for access, procurement and maintenance;
+* workflow submit pages для access, procurement и maintenance;
 * Agent Runs;
 * run detail;
 * Approvals;
 * run-scoped Tool Calls;
 * run-scoped Audit Trail;
-* Settings and API status.
+* Settings и API status.
 
-The frontend keeps a browser-local known-run index that stores run IDs for the
-current demo session. It does not implement global backend search, a global audit
-search, a production approval queue, requester/admin role separation or business
-logic execution.
+Frontend хранит browser-local known-run index, в котором сохраняются run IDs для текущей demo session. Он не реализует global backend search, global audit search, production approval queue, разделение ролей requester/admin или выполнение business logic.
 
-This is not a production requester portal, operator portal, admin portal or
-monitoring product.
+Это не production requester portal, operator portal, admin portal или monitoring product.
 
-## 7. Provider/model status
+## 7. Статус Provider/model
 
-The default demo and test path uses deterministic mock/fake providers. The API
-capabilities endpoint reports `provider_mode` as `mock`.
+Default demo и test path используют детерминированные mock/fake providers. Endpoint API capabilities сообщает `provider_mode` как `mock`.
 
-Real-provider smoke is not the default demo path and must remain explicit and
-manual. There is no silent fallback from a failed real provider to mock.
+Real-provider smoke не является default demo path и должен оставаться явным и ручным. Silent fallback с failed real provider на mock отсутствует.
 
-API capabilities expose model selection as disabled:
+API capabilities показывают model selection как disabled:
 
 ```text
 model_selection.enabled = false
@@ -215,12 +189,11 @@ active_profile = "mock"
 available_profiles = ["mock"]
 ```
 
-No OpenRouter, Yandex, provider marketplace, provider fallback routing,
-streaming, quota/billing or frontend model selector is implemented.
+OpenRouter, Yandex, provider marketplace, provider fallback routing, streaming, quota/billing и frontend model selector не реализованы.
 
-## 8. Data, audit and safety status
+## 8. Статус Data, audit и safety
 
-The prototype uses local SQLite persistence for gateway records:
+Прототип использует локальное SQLite-хранилище для gateway records:
 
 * agent runs;
 * validated LLM decisions;
@@ -228,36 +201,31 @@ The prototype uses local SQLite persistence for gateway records:
 * approvals;
 * audit events.
 
-Tool calls, approvals and audit events are run-scoped and visible through the
-public API read endpoints. Audit events record meaningful lifecycle events such
-as run creation, provider selection, decision validation, tool execution, policy
-checks, approval requests/decisions, manual review, rejection, completion and
-failure.
+Tool calls, approvals и audit events привязаны к run и доступны через public API read endpoints. Audit events фиксируют значимые lifecycle events, такие как run creation, provider selection, decision validation, tool execution, policy checks, approval requests/decisions, manual review, rejection, completion и failure.
 
-Safety-related behavior in the frozen prototype includes:
+Safety-related behavior в замороженном прототипе включает:
 
-* public API redaction for tool payloads and approval text;
-* controlled public projection of run, tool, approval and audit records;
-* an approval safety floor so `AUTO_APPROVE` does not bypass high-risk,
-  critical-risk or default-approval state-changing controls;
-* strict domain-template validation before dispatching workflow actions;
-* canonical maintenance severity validation through `MaintenanceSeverity`;
-* no provider/model selection fields accepted in workflow submit bodies;
-* no secrets intended in public API responses.
+* public API redaction для tool payloads и approval text;
+* controlled public projection для run, tool, approval и audit records;
+* approval safety floor, чтобы `AUTO_APPROVE` не обходил high-risk, critical-risk или default-approval state-changing controls;
+* строгую domain-template validation перед dispatching workflow actions;
+* canonical maintenance severity validation через `MaintenanceSeverity`;
+* workflow submit bodies не принимают provider/model selection fields;
+* public API responses не должны содержать secrets.
 
-## 9. What is intentionally not implemented
+## 9. Что намеренно не реализовано
 
-The prototype intentionally does not implement:
+Прототип намеренно не реализует:
 
 * production authentication;
 * RBAC;
 * tenants;
 * real enterprise connectors;
-* real IAM, ERP, 1C, Jira, CRM, CMMS or EAM integrations;
+* реальные интеграции IAM, ERP, 1C, Jira, CRM, CMMS или EAM;
 * provider/model selection;
-* global run search or history;
+* global run search или history;
 * global audit search;
-* deployment or hosting;
+* deployment или hosting;
 * payment;
 * desktop app;
 * workflow builder;
@@ -267,34 +235,37 @@ The prototype intentionally does not implement:
 * production observability;
 * production security hardening.
 
-## 10. Future directions
+## 10. Будущие направления
 
-Potential future backlog, not committed scope:
+Потенциальный future backlog, не являющийся committed scope:
 
-* real integrations through API or MCP-style boundaries;
-* provider profiles and explicit provider selection;
-* authentication, RBAC and tenant isolation;
-* deployment packaging and hosted environments;
-* richer admin/operator UI surfaces;
+* реальные интеграции через API или MCP-style boundaries;
+* provider profiles и explicit provider selection;
+* authentication, RBAC и tenant isolation;
+* deployment packaging и hosted environments;
+* более развитые admin/operator UI surfaces;
 * workflow-builder concepts;
-* monitoring, analytics and operational reporting.
+* monitoring, analytics и operational reporting.
 
-Any future expansion should preserve the control model: backend validation,
-explicit tool boundaries, policy checks, approval gates and auditability.
+Любое будущее расширение должно сохранять control model: backend validation, explicit tool boundaries, policy checks, approval gates и auditability.
 
-## 11. Related documents
+## 11. Связанные документы
 
-Existing companion documents:
+Существующие companion documents:
 
 * [PROJECT_MAP.md](PROJECT_MAP.md) - architecture map, package ownership,
-  runtime ownership and entrypoints.
-* [README.md](../README.md) - public quickstart and validation commands.
+  runtime ownership и entrypoints.
+
+* [README.md](../README.md) - public quickstart и validation commands.
 
 * [ARCHITECTURE.md](ARCHITECTURE.md) - architecture, lifecycle, boundaries,
-  failure model and limitations.
+  failure model и limitations.
+
 * [API_AND_EVALS.md](API_AND_EVALS.md) - public API surface, controlled
-  outcomes and deterministic eval suite.
-* [DEMO_WALKTHROUGH.md](DEMO_WALKTHROUGH.md) - local demo walkthrough for the
-  backend, frontend and eval runner.
-* [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) - setup, validation and safe
+  outcomes и deterministic eval suite.
+
+* [DEMO_WALKTHROUGH.md](DEMO_WALKTHROUGH.md) - local demo walkthrough для
+  backend, frontend и eval runner.
+
+* [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) - setup, validation и safe
   development workflow.

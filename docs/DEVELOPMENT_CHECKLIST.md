@@ -1,12 +1,12 @@
-# Development Checklist
+# Чеклист разработки
 
-This checklist defines routine development hygiene for `enterprise-ai-tool-gateway`.
+Этот checklist определяет routine development hygiene для `enterprise-ai-tool-gateway`.
 
-It is not the provider policy, architecture map, or task workflow. Provider-specific rules live in `docs/LLM_PROVIDER_POLICY.md`; package ownership and entrypoints live in `docs/PROJECT_MAP.md`; accepted project scope lives in `docs/PROJECT_CONTEXT.md`.
+Это не provider policy, architecture map или task workflow. Provider-specific rules находятся в `docs/LLM_PROVIDER_POLICY.md`; package ownership и entrypoints находятся в `docs/PROJECT_MAP.md`; accepted project scope находится в `docs/PROJECT_CONTEXT.md`.
 
 ## 1. Routine Validation
 
-Run the default validation before handing off code changes:
+Запускайте default validation перед передачей code changes:
 
 ```bash
 uv run pytest
@@ -21,32 +21,29 @@ npm run typecheck
 npm run build
 ```
 
-Before commit, also inspect:
+Перед commit также проверьте:
 
 ```bash
 git status --short --untracked-files=all
 ```
 
-Docs-only changes do not normally require pytest unless they modify commands, paths, or behavior claims that need verification.
+Docs-only changes обычно не требуют pytest, если они не изменяют commands, paths или behavior claims, которые нужно верифицировать.
 
 ## 2. Test Boundary
 
-Default tests must be deterministic and offline.
+Default tests должны быть deterministic и offline.
 
-Default tests must not require:
+Default tests не должны требовать:
 
 * real provider credentials;
 * network access;
-* GigaChat or Yandex availability;
+* доступности GigaChat или Yandex;
 * real MCP network services;
 * real enterprise systems.
 
-Use deterministic mocks, fake transports, local in-memory storage, or local smoke utilities where appropriate.
+Используйте deterministic mocks, fake transports, local in-memory storage или local smoke utilities там, где это уместно.
 
-Stage 7 procurement and maintenance_lite tests must remain offline and
-deterministic. They must not call real procurement, ERP, 1C, CMMS, EAM, TOIR,
-vendor, asset, budget, work-order or provider systems. New demo template tests
-should cover:
+Stage 7 procurement и maintenance_lite tests должны оставаться offline и deterministic. Они не должны вызывать реальные procurement, ERP, 1C, CMMS, EAM, TOIR, vendor, asset, budget, work-order или provider systems. Новые demo template tests должны покрывать:
 
 * completed path;
 * approval path;
@@ -54,36 +51,27 @@ should cover:
 * manual review;
 * rejected path;
 * unknown tool proposal;
-* audit and persistence records;
-* draft output stored through `ToolCall.output_payload`.
+* audit и persistence records;
+* draft output, сохранённый через `ToolCall.output_payload`.
 
-Stage 8 API and eval tests must remain offline and deterministic. API tests
-must use local test clients, temporary SQLite storage and deterministic
-mock/fake providers only. The eval runner must exercise `/api/v1` endpoints,
-not application runtimes directly, and `scripts/run_eval.py` must pass before
-Stage 8 acceptance is considered complete.
+Stage 8 API и eval tests должны оставаться offline и deterministic. API tests должны использовать только local test clients, temporary SQLite storage и deterministic mock/fake providers. Eval runner должен проверять endpoints `/api/v1`, а не application runtimes напрямую, и `scripts/run_eval.py` должен проходить до того, как Stage 8 acceptance считается завершённым.
 
-Stage 9 frontend validation must remain local/demo and must not call real
-provider or enterprise network paths directly. The frontend talks only to
-FastAPI `/api/v1` through `frontend/src/api/`, and browser localStorage may
-store run IDs only.
+Stage 9 frontend validation должна оставаться local/demo и не должна напрямую вызывать real provider или enterprise network paths. Frontend взаимодействует только с FastAPI `/api/v1` через `frontend/src/api/`, а browser localStorage может хранить только run IDs.
 
 ## 3. Manual Smoke Boundary
 
-Real provider and MCP smoke checks are manual/explicit only.
+Real provider и MCP smoke checks являются только manual/explicit.
 
-Allowed manual utilities include:
+Разрешённые manual utilities включают:
 
 ```bash
 uv run python scripts/mcp_smoke.py
 uv run python scripts/manual_gigachat_smoke.py --live --matrix lite,pro,max
 ```
 
-Real provider smoke must be disabled by default, require both an explicit
-environment opt-in flag and the per-run `--live` flag, reject placeholder
-credentials, and print safe summaries only.
+Real provider smoke должен быть disabled by default, требовать одновременно explicit environment opt-in flag и per-run `--live` flag, отклонять placeholder credentials и выводить только safe summaries.
 
-GigaChat manual smoke uses:
+GigaChat manual smoke использует:
 
 ```env
 ENABLE_REAL_PROVIDER_SMOKE=1
@@ -94,18 +82,15 @@ GIGACHAT_MAX_RETRIES=1
 GIGACHAT_VERIFY_SSL=true
 ```
 
-Only `GIGACHAT_AUTHORIZATION_KEY` is supported for the GigaChat secret. Older
-GigaChat secret aliases are not supported.
+Для GigaChat secret поддерживается только `GIGACHAT_AUTHORIZATION_KEY`. Старые GigaChat secret aliases не поддерживаются.
 
-The GigaChat smoke matrix may check Lite, Pro and Max model aliases. Treat
-matrix results as manual diagnostics, not deterministic acceptance tests.
+GigaChat smoke matrix может проверять Lite, Pro и Max model aliases. Рассматривайте matrix results как manual diagnostics, а не как deterministic acceptance tests.
 
-The MCP smoke must stay local/fake only and must not call real enterprise
-systems.
+MCP smoke должен оставаться только local/fake и не должен вызывать real enterprise systems.
 
 ## 4. Stage 4 Foundation Awareness
 
-Stage 4 core foundation packages are implemented:
+Stage 4 core foundation packages реализованы:
 
 ```text
 contracts/
@@ -117,60 +102,51 @@ audit/
 db/
 ```
 
-Do not bypass these boundaries when adding later stages:
+Не обходите эти boundaries при добавлении последующих stages:
 
-* LLM output is untrusted until backend validation accepts it.
-* Provider text must pass deterministic JSON extraction, `json.loads`,
-  `LLMDecisionPayload` validation and runtime semantic validation.
-* Do not use fuzzy JSON repair, provider-native function calling or real
-  provider calls in default pytest.
-* Tools execute only through the controlled tool boundary.
-* ToolRegistry remains the canonical internal tool boundary; MCP is optional and
-  external.
-* State-changing tools require policy checks.
-* Risky state-changing tools require approval.
-* Audit events must not contain secrets.
-* DB persistence stores already validated facts and must not own workflow or policy decisions.
-* Stage 7 procurement and maintenance_lite controlled actions are synthetic
-  draft-only actions and must not add domain DB tables or real connectors.
-* Stage 8 API routes are inbound adapters only. Application runtimes own
-  workflow orchestration; routes must not own policy, approval, tool execution,
-  workflow transition or audit logic.
-* Stage 8 evals are deterministic acceptance checks, not model benchmarks,
-  prompt optimization, provider comparison or production observability.
-* Stage 9 frontend is an independent React/Vite client under `frontend/`.
-  `frontend/src/api/` owns HTTP calls to `/api/v1`; random UI components must
-  not call `fetch` directly or import backend internals. UI copy must not claim
-  unsupported production/admin features such as auth, RBAC, tenants, provider
-  management, policy editing, global audit search or global approval queues.
+* LLM output считается недоверенным, пока backend validation не примет его.
+* Provider text должен пройти deterministic JSON extraction, `json.loads`,
+  `LLMDecisionPayload` validation и runtime semantic validation.
+* Не используйте fuzzy JSON repair, provider-native function calling или real provider calls в default pytest.
+* Tools выполняются только через controlled tool boundary.
+* ToolRegistry остаётся canonical internal tool boundary; MCP является optional и external.
+* State-changing tools требуют policy checks.
+* Risky state-changing tools требуют approval.
+* Audit events не должны содержать secrets.
+* DB persistence сохраняет уже validated facts и не должен владеть workflow или policy decisions.
+* Stage 7 procurement и maintenance_lite controlled actions являются synthetic draft-only actions и не должны добавлять domain DB tables или real connectors.
+* Stage 8 API routes являются только inbound adapters. Application runtimes владеют workflow orchestration; routes не должны владеть policy, approval, tool execution, workflow transition или audit logic.
+* Stage 8 evals являются deterministic acceptance checks, а не model benchmarks, prompt optimization, provider comparison или production observability.
+* Stage 9 frontend — это независимый React/Vite client в `frontend/`.
+  `frontend/src/api/` владеет HTTP calls к `/api/v1`; случайные UI components не должны вызывать `fetch` напрямую или импортировать backend internals. UI copy не должна заявлять unsupported production/admin features, такие как auth, RBAC, tenants, provider management, policy editing, global audit search или global approval queues.
 
 ## 5. Source-of-Truth Docs
 
-Durable project facts belong in source-of-truth docs:
+Durable project facts должны находиться в source-of-truth docs:
 
-* `docs/PROJECT_CONTEXT.md` for accepted scope, status, non-goals and boundaries;
-* `docs/PROJECT_MAP.md` for package map, dependency direction and entrypoints;
-* `docs/LLM_PROVIDER_POLICY.md` for provider/model/tool-calling policy;
-* `docs/DEVELOPMENT_CHECKLIST.md` for development and validation hygiene.
+* `docs/PROJECT_CONTEXT.md` — для accepted scope, status, non-goals и boundaries;
+* `docs/PROJECT_MAP.md` — для package map, dependency direction и entrypoints;
+* `docs/LLM_PROVIDER_POLICY.md` — для provider/model/tool-calling policy;
+* `docs/DEVELOPMENT_CHECKLIST.md` — для development и validation hygiene.
 
-`docs/codex/` task envelopes, plans, stage briefs and reports are local workflow artifacts. They can inform implementation while active, but they are not durable source of truth.
+`docs/codex/` task envelopes, plans, stage briefs и reports являются local workflow artifacts. Они могут помогать implementation, пока активны, но не являются durable source of truth.
 
 ## 6. Local Artifacts
 
-Do not commit temporary review or patch artifacts.
+Не коммитьте temporary review или patch artifacts.
 
-Local `*.diff` and `*.patch` files are ignored and should remain local unless a task explicitly asks for a committed patch artifact.
+Local `*.diff` и `*.patch` files игнорируются и должны оставаться локальными, если task явно не просит committed patch artifact.
 
-Delete completed Codex workflow artifacts when their durable facts have been accepted into source-of-truth docs or code and they are no longer useful for future work.
+Удаляйте completed Codex workflow artifacts, когда их durable facts уже приняты в source-of-truth docs или code и они больше не полезны для future work.
 
 ## 7. Secret Hygiene
 
-Never commit or expose:
+Никогда не коммитьте и не раскрывайте:
 
-* real API keys, bearer tokens, authorization headers or cookies;
-* `.env` files with real credentials;
-* raw provider logs containing secrets;
-* screenshots or docs that reveal private credentials;
-* unredacted audit payloads with credential-like fields.
+* real API keys, bearer tokens, authorization headers или cookies;
+* `.env` files с real credentials;
+* raw provider logs, содержащие secrets;
+* screenshots или docs, раскрывающие private credentials;
+* unredacted audit payloads с credential-like fields.
 
-Use placeholders only in public examples and ensure real-provider paths fail early on missing or placeholder credentials.
+Используйте только placeholders в public examples и обеспечивайте fail early для real-provider paths при missing или placeholder credentials.
