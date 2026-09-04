@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useLocale } from "../../i18n/LocaleProvider";
 
 export type DataTableColumn<T> = {
   key: string;
@@ -14,9 +15,11 @@ type DataTableProps<T> = {
   emptyLabel?: string;
 };
 
-export function DataTable<T>({ columns, rows, rowKey, emptyLabel = "No records." }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, emptyLabel }: DataTableProps<T>) {
+  const { t } = useLocale();
+
   if (rows.length === 0) {
-    return <div className="table-empty">{emptyLabel}</div>;
+    return <div className="table-empty">{emptyLabel ?? t("common.noRecords")}</div>;
   }
 
   return (

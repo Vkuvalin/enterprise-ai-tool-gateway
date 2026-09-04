@@ -4,6 +4,7 @@ import { RiskBadge } from "../../components/status/RiskBadge";
 import { StatusChip } from "../../components/status/StatusChip";
 import { getRunStatusPresentation } from "../../components/status/statusPresentation";
 import { RunLinks } from "./RunLinks";
+import { useLocale } from "../../i18n/LocaleProvider";
 
 type RunSummaryPanelProps = {
   run: RunResponse;
@@ -12,32 +13,33 @@ type RunSummaryPanelProps = {
 };
 
 export function RunSummaryPanel({ run, showDetailLink = true, showLinks = true }: RunSummaryPanelProps) {
-  const status = getRunStatusPresentation(run.status);
+  const { t } = useLocale();
+  const status = getRunStatusPresentation(run.status, t);
 
   return (
-    <InspectorPanel title="Run Summary">
+    <InspectorPanel title={t("runSummary.title")}>
       <div className="kv-grid">
-        <span>Run ID</span>
+        <span>{t("common.runId")}</span>
         <code>{run.id}</code>
-        <span>Request type</span>
+        <span>{t("common.requestType")}</span>
         <code>{run.request_type}</code>
-        <span>Domain template</span>
+        <span>{t("runSummary.domainTemplate")}</span>
         <code>{run.domain_template}</code>
-        <span>Status</span>
+        <span>{t("common.status")}</span>
         <StatusChip label={status.label} tone={status.tone} title={status.description} />
-        <span>Risk</span>
+        <span>{t("common.risk")}</span>
         <RiskBadge risk={run.risk_level} />
-        <span>Approval mode</span>
+        <span>{t("common.approvalMode")}</span>
         <code>{run.approval_mode}</code>
-        <span>Requires approval</span>
-        <span>{run.requires_approval ? "yes" : "no"}</span>
-        <span>Provider</span>
-        <code>{run.provider_name ?? "not returned"}</code>
-        <span>Model</span>
-        <code>{run.model_name ?? "not returned"}</code>
-        <span>Created</span>
+        <span>{t("common.requiresApproval")}</span>
+        <span>{run.requires_approval ? t("common.yes") : t("common.no")}</span>
+        <span>{t("common.provider")}</span>
+        <code>{run.provider_name ?? t("common.notReturned")}</code>
+        <span>{t("common.model")}</span>
+        <code>{run.model_name ?? t("common.notReturned")}</code>
+        <span>{t("common.created")}</span>
         <time>{run.created_at}</time>
-        <span>Updated</span>
+        <span>{t("common.updated")}</span>
         <time>{run.updated_at}</time>
       </div>
       {showLinks ? <RunLinks runId={run.id} showDetailLink={showDetailLink} /> : null}

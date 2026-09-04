@@ -20,7 +20,8 @@ Default validation и demo runs не требуют real provider credentials. D
 Windows notes:
 
 * Запускайте команды из корня repository, если раздел явно не требует использовать `frontend/`.
-* Для самого быстрого local demo start запустите `run_demo.cmd` из корня repository. Он запускает backend и frontend, пишет logs в `.runtime/logs/` и открывает `http://127.0.0.1:5173/dashboard`.
+* После clean checkout один раз выполните `cd frontend`, `npm install`, `cd ..`; runner не устанавливает dependencies автоматически.
+* Для самого быстрого local demo start запустите `run_demo.cmd` из корня repository. Он запускает backend и frontend, пишет per-instance logs и открывает `http://127.0.0.1:5173/dashboard`.
 * Если `npm` установлен, но отсутствует в `PATH`, используйте полный путь к npm executable:
   `C:\Program Files\nodejs\npm.cmd`.
 
@@ -28,24 +29,27 @@ Windows notes:
 
 `run_demo.cmd` — это локальный convenience wrapper вокруг
 `scripts/demo/run_demo.ps1`. Он запускает FastAPI backend на
-`127.0.0.1:8000` и Vite frontend на `127.0.0.1:5173` только если эти services ещё не healthy/reachable.
+`127.0.0.1:8000` и Vite frontend на `127.0.0.1:5173` только если эти services ещё не готовы. Backend reuse требует HTTP 200 и `status: "ok"`; frontend reuse дополнительно требует exact project marker `/gateway-demo-marker.txt` и working same-origin `/api/v1/health` proxy. Новый Vite запускается с `--strictPort`, поэтому чужой server на 5173 не маскируется переходом на другой port.
 
 Runtime files являются локальными artifacts в `.runtime/`:
 
 ```text
-.runtime/demo-backend.pid
-.runtime/demo-frontend.pid
-.runtime/logs/backend.log
-.runtime/logs/frontend.log
+.runtime/instances/<instance-id>/instance.json
+.runtime/instances/<instance-id>/backend.json
+.runtime/instances/<instance-id>/frontend.json
+.runtime/logs/<instance-id>/backend.log
+.runtime/logs/<instance-id>/frontend.log
 ```
 
-Нажмите `Q` в controlling PowerShell window, чтобы остановить только процессы, запущенные этим runner window. Чтобы остановить предыдущий runner-owned demo, выполните:
+Service records создаются только для processes, фактически запущенных этим runner instance. Они связывают instance/service, PID, process start identity, repository root и exact log path; reused services не становятся owned. `Q` использует captured metadata текущего window и перед termination повторно проверяет PID/start identity, literal command markers и process ancestry. Если proof недоступен, cleanup fail-closed и сохраняет process/metadata для диагностики.
+
+Нажмите `Q` в controlling PowerShell window, чтобы остановить только процессы, запущенные этим runner instance. Чтобы остановить все verified runner-owned instances, выполните:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1
 ```
 
-Stop script читает только runner PID files и не завершает unrelated процессы Python, Node.js, npm, uvicorn или Vite.
+Stop script перечисляет только per-instance records, удаляет safely stale dead records и не выводит ownership из port, process name или PID alone. Invalid/unverifiable records остаются нетронутыми, а script возвращает non-zero exit. Legacy shared `.runtime/demo-*.pid` намеренно игнорируются. Logs могут остаться после cleanup для диагностики.
 
 ## 3. Backend setup and run
 
@@ -74,7 +78,7 @@ http://127.0.0.1:8000/
 
 ## 4. Frontend setup and run
 
-Во втором терминале при необходимости установите frontend dependencies:
+Перед первым frontend start после clean checkout установите dependencies:
 
 ```bash
 cd frontend
@@ -84,7 +88,6 @@ npm install
 Запустите Vite dev server на документированном local address:
 
 ```bash
-cd frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
@@ -174,6 +177,7 @@ npm run build
 Smoke expectations:
 
 * нет blank screen;
+* fresh browser session использует RU, а `RU → EN → RU` работает без reload и без reset текущих forms/run/approval state;
 * API status healthy;
 * provider mode — `mock`;
 * model selection disabled;
@@ -181,6 +185,9 @@ Smoke expectations:
   `WAITING_FOR_APPROVAL`, `NEEDS_USER_INPUT`, `NEEDS_MANUAL_REVIEW`,
   `REJECTED`, `FAILED_VALIDATION`, `FAILED_TOOL` и `FAILED_PROVIDER`;
 * approval-required workflows не показывают completed draft до approval;
+* aggregate partial/unavailable/failed reads не выглядят как authoritative empty/current data;
+* run/approval data, controls, drafts и async feedback принадлежат текущему route ID;
+* raw JSON, UUIDs, JSON/request keys, canonical enum/status values и backend-provided text не меняются при locale switch;
 * run-scoped tool calls и audit records видимы.
 
 ## 9. Diff and review workflow
@@ -221,7 +228,7 @@ git -c core.quotepath=false diff --cached --output=accepted-baseline.diff
 * `frontend/dist/`
 * `frontend/.vite/`
 * `.env` или secret-bearing files
-* local SQLite databases, logs и runtime data
+* local SQLite databases, `.runtime/` metadata/logs и runtime data
 * temporary task/report/plan/diff artifacts в `docs/codex/` или других ignored working directories
 
 Держите generated reports и diffs вне final commits, если task явно не требует committed artifact. Перед commit любых изменений проверьте:
@@ -270,14 +277,14 @@ Frontend не может достучаться до API:
 
 Vite port conflict:
 
-По возможности используйте документированный explicit port:
+Используйте документированный explicit port:
 
 ```bash
 cd frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Если другой process уже занимает port, остановите этот process или выберите другой local port и откройте URL, который напечатает Vite.
+Demo runner требует именно 5173 и положительно проверяет exact marker `enterprise-ai-tool-gateway:frontend:v1` вместе с proxied `/api/v1/health`. Arbitrary HTTP response, redirect, wrong marker или broken proxy считаются conflict; runner не останавливает такой process. Для manual development можно выбрать другой local port и открыть URL, который напечатает Vite.
 
 CRLF/LF Git warnings:
 

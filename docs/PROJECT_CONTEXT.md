@@ -53,10 +53,11 @@ request
 * API: FastAPI adapter, версионированный под `/api/v1`.
 * Workflows: три синтетических enterprise-workflows:
   `ACCESS_REQUEST`, `PROCUREMENT_REQUEST` и `MAINTENANCE_REQUEST`.
-* Frontend: независимый React + TypeScript + Vite client в `frontend/`.
+* Frontend: независимый React + TypeScript + Vite client в `frontend/` с typed RU/EN presentation layer и русским языком по умолчанию для fresh session.
 * Evals: детерминированный acceptance runner с набором из 21 кейса.
 * Persistence: локальное SQLite-хранилище через async SQLAlchemy.
 * Provider mode: по умолчанию используется детерминированный mock/fake provider path.
+* Demo runner: локальный Windows launcher с per-instance process ownership и positive frontend identity probe.
 
 Реализованные backend-области включают contracts, workflow transitions, provider ports, tool registry/executor, policy decisions, approval primitives, audit redaction/events, persistence, application runtimes, FastAPI routes и evals.
 
@@ -95,6 +96,7 @@ request
 
 * synthetic checks для requester, vendor, catalog item, budget/policy и duplicate-request;
 * backend-валидацию procurement request type, domain template и tool names;
+* explicit USD-only API contract для synthetic procurement requests;
 * policy control перед созданием purchase request draft;
 * approval для high-value или approval-required draft actions;
 * manual review или rejection для blocked vendors, restricted items, budget issues, duplicates или отсутствующих synthetic data.
@@ -151,9 +153,9 @@ Backend предоставляет локальный/demo FastAPI API под `/
 * `GET /api/v1/runs/{run_id}/approvals`;
 * `GET /api/v1/runs/{run_id}/audit-events`.
 
-Business outcomes моделируются как controlled run statuses, а не как generic HTTP failures. Например, outcomes rejected, manual-review, user-input и failed-validation могут возвращать HTTP 200 со статусом run, который объясняет controlled stop. HTTP errors всё ещё используются для malformed request bodies, unknown run или approval IDs, invalid approval decisions и state conflicts.
+Business outcomes моделируются как controlled run statuses, а не как generic HTTP failures. Например, outcomes rejected, manual-review, user-input и failed-validation могут возвращать HTTP 200 со статусом run, который объясняет controlled stop. HTTP errors всё ещё используются для malformed request bodies, unknown run или approval IDs, invalid approval decisions и state conflicts. Approval resolution требует непустой `decided_by`; persistence-level conditional update даёт ровно одному pending-to-terminal решению ownership, а concurrent или stale loser получает controlled `409 state_conflict` до downstream terminal mutations.
 
-Public API responses используют redacted projection для tool payloads и approval free-text fields. Backend runtime objects могут содержать больше внутренних деталей, чем раскрывают public response DTOs.
+Public API responses используют redacted projection для tool payloads и approval free-text fields. Recursive marker-based redaction покрывает также high-confidence quoted/serialized credential assignments, но не является general-purpose DLP. Backend runtime objects могут содержать больше внутренних деталей, чем раскрывают public response DTOs.
 
 ## 6. Статус Frontend
 
@@ -171,7 +173,9 @@ UI лучше всего понимать как локальную Gateway Oper
 * run-scoped Audit Trail;
 * Settings и API status.
 
-Frontend хранит browser-local known-run index, в котором сохраняются run IDs для текущей demo session. Он не реализует global backend search, global audit search, production approval queue, разделение ролей requester/admin или выполнение business logic.
+Static operator-facing UI поддерживает RU и EN; fresh local/demo session использует RU, а locale switch и preference остаются browser-local presentation state и не меняют API contracts, canonical IDs/enums, raw JSON или backend-provided evidence.
+
+Frontend хранит browser-local known-run index и selected run для текущей demo session, а также locale preference. Это convenience state, которое безопасно деградирует при storage failure; оно не является backend truth и не реализует global backend search, global audit search, production approval queue, разделение ролей requester/admin или выполнение business logic. Aggregate reads различают complete, partial и unavailable data, failed refresh оставляет stale/error evidence, а run/approval data, controls, drafts и async feedback привязаны к identity текущего route entity.
 
 Это не production requester portal, operator portal, admin portal или monitoring product.
 
@@ -208,7 +212,9 @@ Safety-related behavior в замороженном прототипе вклю�
 * public API redaction для tool payloads и approval text;
 * controlled public projection для run, tool, approval и audit records;
 * approval safety floor, чтобы `AUTO_APPROVE` не обходил high-risk, critical-risk или default-approval state-changing controls;
+* atomic pending-to-terminal approval ownership с controlled conflict для concurrent loser;
 * строгую domain-template validation перед dispatching workflow actions;
+* USD-only validation для synthetic procurement submit requests;
 * canonical maintenance severity validation через `MaintenanceSeverity`;
 * workflow submit bodies не принимают provider/model selection fields;
 * public API responses не должны содержать secrets.

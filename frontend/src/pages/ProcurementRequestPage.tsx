@@ -8,11 +8,14 @@ import { useApiStatus } from "../features/capabilities/useApiStatus";
 import { WorkflowResultPanel } from "../features/workflows/WorkflowResultPanel";
 import { WorkflowSafetyPanel } from "../features/workflows/WorkflowSafetyPanel";
 import { getWorkflowByKey } from "../features/workflows/registry";
+import { useLocale } from "../i18n/LocaleProvider";
+import { getApprovalModeLabel } from "../i18n/presentation";
 import { addKnownRunId } from "../state/knownRuns";
 
 const workflow = getWorkflowByKey("procurement");
 
 export function ProcurementRequestPage() {
+  const { t } = useLocale();
   const { capabilities } = useApiStatus();
   const approvalModes = capabilities?.approval_modes ?? ["HIGH_RISK_ONLY"];
   const [form, setForm] = useState<ProcurementSubmitRequest>({
@@ -50,15 +53,19 @@ export function ProcurementRequestPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Procurement Request" eyebrow="Workflow submit" description={workflow.description} />
+      <PageHeader
+        title={t(workflow.titleKey)}
+        eyebrow={t("workflows.form.eyebrow")}
+        description={t(workflow.descriptionKey)}
+      />
       <div className="content-with-inspector">
         <form className="form-panel" onSubmit={(event) => void onSubmit(event)}>
           <label>
-            User ID
+            {t("workflows.form.userId")}
             <input value={form.user_id} onChange={(event) => setForm({ ...form, user_id: event.target.value })} />
           </label>
           <label>
-            Request text
+            {t("workflows.form.requestText")}
             <textarea
               value={form.request_text}
               onChange={(event) => setForm({ ...form, request_text: event.target.value })}
@@ -67,28 +74,28 @@ export function ProcurementRequestPage() {
           </label>
           <div className="form-grid">
             <label>
-              Requester ID
+              {t("workflows.procurement.requesterId")}
               <input
                 value={form.requester_id ?? ""}
                 onChange={(event) => setForm({ ...form, requester_id: event.target.value || null })}
               />
             </label>
             <label>
-              Item ID
+              {t("workflows.procurement.itemId")}
               <input
                 value={form.item_id ?? ""}
                 onChange={(event) => setForm({ ...form, item_id: event.target.value || null })}
               />
             </label>
             <label>
-              Item name
+              {t("workflows.procurement.itemName")}
               <input
                 value={form.item_name ?? ""}
                 onChange={(event) => setForm({ ...form, item_name: event.target.value || null })}
               />
             </label>
             <label>
-              Quantity
+              {t("workflows.procurement.quantity")}
               <input
                 type="number"
                 min={1}
@@ -99,10 +106,11 @@ export function ProcurementRequestPage() {
               />
             </label>
             <label>
-              Estimated total
+              {t("workflows.procurement.estimatedTotal")}
               <input
                 type="number"
                 min={0}
+                step="any"
                 value={form.estimated_total ?? ""}
                 onChange={(event) =>
                   setForm({ ...form, estimated_total: event.target.value ? Number(event.target.value) : null })
@@ -110,39 +118,39 @@ export function ProcurementRequestPage() {
               />
             </label>
             <label>
-              Currency
+              {t("workflows.procurement.currency")}
               <input value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value })} />
             </label>
             <label>
-              Cost center
+              {t("workflows.procurement.costCenter")}
               <input
                 value={form.cost_center ?? ""}
                 onChange={(event) => setForm({ ...form, cost_center: event.target.value || null })}
               />
             </label>
             <label>
-              Preferred vendor
+              {t("workflows.procurement.preferredVendor")}
               <input
                 value={form.preferred_vendor_id ?? ""}
                 onChange={(event) => setForm({ ...form, preferred_vendor_id: event.target.value || null })}
               />
             </label>
             <label>
-              Approval mode
+              {t("workflows.form.approvalMode")}
               <select
                 value={form.approval_mode}
                 onChange={(event) => setForm({ ...form, approval_mode: event.target.value })}
               >
                 {approvalModes.map((mode) => (
                   <option key={mode} value={mode}>
-                    {mode}
+                    {getApprovalModeLabel(mode, t)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
           <label>
-            Justification
+            {t("workflows.form.justification")}
             <textarea
               value={form.justification ?? ""}
               onChange={(event) => setForm({ ...form, justification: event.target.value || null })}
@@ -151,7 +159,7 @@ export function ProcurementRequestPage() {
           </label>
           {error ? <ErrorState error={error} /> : null}
           <ActionButton type="submit" variant="primary" disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit procurement request"}
+            {submitting ? t("workflows.form.submitting") : t("workflows.procurement.submit")}
           </ActionButton>
         </form>
         <div className="stack">

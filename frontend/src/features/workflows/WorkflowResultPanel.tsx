@@ -4,6 +4,7 @@ import { JsonViewer } from "../../components/data/JsonViewer";
 import { RiskBadge } from "../../components/status/RiskBadge";
 import { StatusChip } from "../../components/status/StatusChip";
 import { getRunStatusPresentation } from "../../components/status/statusPresentation";
+import { useLocale } from "../../i18n/LocaleProvider";
 import { RunLinks } from "../runs/RunLinks";
 
 type WorkflowResultPanelProps = {
@@ -11,44 +12,42 @@ type WorkflowResultPanelProps = {
 };
 
 export function WorkflowResultPanel({ result }: WorkflowResultPanelProps) {
+  const { t } = useLocale();
   if (!result) {
     return (
-      <InspectorPanel title="Submit Result">
-        <p className="muted">Submit a workflow to create or inspect a controlled backend run.</p>
+      <InspectorPanel title={t("workflows.result.title")}>
+        <p className="muted">{t("workflows.result.emptyHint")}</p>
       </InspectorPanel>
     );
   }
 
-  const status = getRunStatusPresentation(result.run.status);
+  const status = getRunStatusPresentation(result.run.status, t);
 
   return (
-    <InspectorPanel title="Submit Result">
+    <InspectorPanel title={t("workflows.result.title")}>
       <div className="kv-grid">
-        <span>Run ID</span>
+        <span>{t("common.runId")}</span>
         <code>{result.run.id}</code>
-        <span>Status</span>
+        <span>{t("common.status")}</span>
         <StatusChip label={status.label} tone={status.tone} title={status.description} />
-        <span>Risk</span>
+        <span>{t("common.risk")}</span>
         <RiskBadge risk={result.run.risk_level} />
-        <span>Requires approval</span>
-        <span>{result.requires_approval ? "yes" : "no"}</span>
-        <span>Tool calls</span>
+        <span>{t("common.requiresApproval")}</span>
+        <span>{result.requires_approval ? t("common.yes") : t("common.no")}</span>
+        <span>{t("common.toolCalls")}</span>
         <span>{result.tool_calls.length}</span>
-        <span>Audit events</span>
+        <span>{t("common.auditEvents")}</span>
         <span>{result.audit_events.length}</span>
       </div>
       {result.run.status === "FAILED_TOOL" ? (
         <div className="state-box state-box--error">
-          <strong>Controlled tool failure</strong>
-          <span>
-            The backend kept execution inside the gateway boundary and returned a safe tool-failure state instead of
-            hiding or retrying the failure in the client.
-          </span>
+          <strong>{t("workflows.result.controlledToolFailure")}</strong>
+          <span>{t("workflows.result.controlledToolFailureDescription")}</span>
         </div>
       ) : null}
       {result.final_summary ? <p>{result.final_summary}</p> : null}
       <RunLinks runId={result.run.id} />
-      {result.approval ? <JsonViewer value={result.approval} label="Approval" /> : null}
+      {result.approval ? <JsonViewer value={result.approval} label={t("workflows.result.approval")} /> : null}
     </InspectorPanel>
   );
 }

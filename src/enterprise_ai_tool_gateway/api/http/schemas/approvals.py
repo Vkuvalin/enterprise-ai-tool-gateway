@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 
 from enterprise_ai_tool_gateway.api.http.schemas.common import ApiModel
 from enterprise_ai_tool_gateway.contracts.enums import ApprovalStatus
@@ -15,6 +15,13 @@ class ApprovalResolveRequest(ApiModel):
     status: ApprovalStatus
     decided_by: str
     decision_comment: str | None = None
+
+    @field_validator("decided_by")
+    @classmethod
+    def validate_decided_by(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("decided_by must not be empty")
+        return value
 
     @model_validator(mode="after")
     def validate_decision_status(self) -> "ApprovalResolveRequest":

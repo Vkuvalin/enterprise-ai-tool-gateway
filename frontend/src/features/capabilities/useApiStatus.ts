@@ -9,6 +9,7 @@ export type ApiStatusSnapshot = {
   loading: boolean;
   refreshing: boolean;
   hasLoaded: boolean;
+  stale: boolean;
   error: NormalizedApiError | null;
   refresh: () => void;
 };
@@ -23,6 +24,7 @@ export function useApiStatus(options: ApiStatusOptions = {}): ApiStatusSnapshot 
   const [capabilities, setCapabilities] = useState<CapabilitiesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [stale, setStale] = useState(false);
   const [error, setError] = useState<NormalizedApiError | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const callbacksRef = useRef(options);
@@ -38,6 +40,7 @@ export function useApiStatus(options: ApiStatusOptions = {}): ApiStatusSnapshot 
     setLoading(true);
     if (!hadLoaded) {
       setError(null);
+      setStale(false);
     }
 
     Promise.all([getHealth(), getCapabilities()])
@@ -49,6 +52,7 @@ export function useApiStatus(options: ApiStatusOptions = {}): ApiStatusSnapshot 
         setCapabilities(nextCapabilities);
         setHasLoaded(true);
         setError(null);
+        setStale(false);
         if (manualRefresh) {
           callbacksRef.current.onRefreshSuccess?.();
         }
@@ -58,10 +62,10 @@ export function useApiStatus(options: ApiStatusOptions = {}): ApiStatusSnapshot 
           return;
         }
         const displayError = toDisplayError(nextError);
+        setError(displayError);
+        setStale(hadLoaded);
         if (hadLoaded) {
           callbacksRef.current.onRefreshError?.(displayError);
-        } else {
-          setError(displayError);
         }
       })
       .finally(() => {
@@ -81,6 +85,7 @@ export function useApiStatus(options: ApiStatusOptions = {}): ApiStatusSnapshot 
     loading,
     refreshing: loading && hasLoaded,
     hasLoaded,
+    stale,
     error,
     refresh: () => setRefreshToken((value) => value + 1)
   };

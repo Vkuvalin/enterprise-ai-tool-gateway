@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from enterprise_ai_tool_gateway.contracts.enums import (
@@ -231,14 +231,23 @@ class GatewayRepository:
         decided_by: str,
         decision_comment: str | None = None,
     ) -> ApprovalRead:
-        model = await self._session.get(ApprovalModel, str(approval_id))
+        result = await self._session.execute(
+            update(ApprovalModel)
+            .where(
+                ApprovalModel.id == str(approval_id),
+                ApprovalModel.status == ApprovalStatus.PENDING.value,
+            )
+            .values(
+                status=status.value,
+                decided_by=decided_by,
+                decision_comment=decision_comment,
+                updated_at=utc_now(),
+            )
+            .returning(ApprovalModel)
+        )
+        model = result.scalar_one_or_none()
         if model is None:
-            raise KeyError(f"Approval {approval_id} does not exist")
-        model.status = status.value
-        model.decided_by = decided_by
-        model.decision_comment = decision_comment
-        model.updated_at = utc_now()
-        await self._session.flush()
+            raise ApprovalResolutionConflictError(approval_id)
         return _approval_to_read(model)
 
     async def list_approvals(self, run_id: UUID) -> list[ApprovalRead]:
@@ -352,3 +361,10 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+class ApprovalResolutionConflictError(Exception):
+    """Raised when another transaction already claimed an approval decision."""
+
+    def __init__(self, approval_id: UUID) -> None:
+        super().__init__(f"Approval {approval_id} is no longer pending")

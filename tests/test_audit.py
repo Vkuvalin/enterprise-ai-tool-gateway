@@ -59,10 +59,16 @@ def test_recursive_redaction() -> None:
         "Authorization: Bearer abc123456",
         "Bearer sk-live-token-123456789",
         "api_key=abc123456",
+        'api_key = "abc123456"',
+        "authorization = 'Bearer abc123'",
         "password=correct-horse-battery-staple",
         "token=abc123456",
         "secret: abc123456",
         "Set-Cookie: session_id=abc123456; Path=/",
+        '{"api_key":"abc123456"}',
+        '{"authorization":"Bearer abc123"}',
+        "{'api_key' : 'abc123456'}",
+        '{ "authorization" : "Bearer abc123" }',
     ],
 )
 def test_neutral_string_values_with_sensitive_markers_are_redacted(
@@ -127,6 +133,9 @@ def test_value_redaction_keeps_ordinary_business_text() -> None:
             "message": "API key rotation is scheduled; no credential material is included.",
             "details": "Design token guidelines are documented for the frontend.",
             "summary": "Password reset workflow review completed without sample secrets.",
+            "documentation": 'The field "api_key" is documented without an assigned value.',
+            "field_note": 'The field "api_key": documented without an assigned value.',
+            "schema_note": 'Schema example "token": string.',
         }
     )
 
@@ -134,6 +143,9 @@ def test_value_redaction_keeps_ordinary_business_text() -> None:
         "message": "API key rotation is scheduled; no credential material is included.",
         "details": "Design token guidelines are documented for the frontend.",
         "summary": "Password reset workflow review completed without sample secrets.",
+        "documentation": 'The field "api_key" is documented without an assigned value.',
+        "field_note": 'The field "api_key": documented without an assigned value.',
+        "schema_note": 'Schema example "token": string.',
     }
 
 

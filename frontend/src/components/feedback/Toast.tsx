@@ -1,15 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocale } from "../../i18n/LocaleProvider";
+import type { MessageKey } from "../../i18n/messages";
 
 type ToastTone = "success" | "error" | "info";
 
-export type ToastState = {
-  message: string;
+export type ToastState = ({ message: string; messageKey?: never } | { message?: never; messageKey: MessageKey }) & {
   tone?: ToastTone;
 };
 
 export function useToast(timeoutMs = 1600) {
   const [toast, setToast] = useState<ToastState | null>(null);
   const timeoutRef = useRef<number | null>(null);
+
+  const clearToast = useCallback(() => {
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setToast(null);
+  }, []);
 
   const showToast = useCallback(
     (nextToast: ToastState) => {
@@ -33,7 +42,7 @@ export function useToast(timeoutMs = 1600) {
     };
   }, []);
 
-  return { toast, showToast };
+  return { toast, showToast, clearToast };
 }
 
 type ToastProps = {
@@ -41,13 +50,14 @@ type ToastProps = {
 };
 
 export function Toast({ toast }: ToastProps) {
+  const { t } = useLocale();
   if (!toast) {
     return null;
   }
 
   return (
     <div className={`toast toast--${toast.tone ?? "info"}`} role={toast.tone === "error" ? "alert" : "status"}>
-      {toast.message}
+      {toast.messageKey ? t(toast.messageKey) : toast.message}
     </div>
   );
 }

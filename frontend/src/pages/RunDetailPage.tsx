@@ -14,24 +14,36 @@ import { getRunStatusPresentation } from "../components/status/statusPresentatio
 import { StatusChip } from "../components/status/StatusChip";
 import { ToolCallsTable } from "../features/toolCalls/ToolCallsTable";
 import { RunSummaryPanel } from "../features/runs/RunSummaryPanel";
+import { useLocale } from "../i18n/LocaleProvider";
 import { addKnownRunId } from "../state/knownRuns";
 
+type RunOwnedError = {
+  runId: string;
+  error: NormalizedApiError;
+};
+
 export function RunDetailPage() {
+  const { t } = useLocale();
   const { runId = "" } = useParams();
   const [detail, setDetail] = useState<RunDetailResponse | null>(null);
+  const [loadedRunId, setLoadedRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
+  const [errorState, setErrorState] = useState<RunOwnedError | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
-  const { toast, showToast } = useToast();
+  const { toast, showToast, clearToast } = useToast();
+
+  const currentDetail = loadedRunId === runId ? detail : null;
+  const currentError = errorState?.runId === runId ? errorState.error : null;
 
   useEffect(() => {
     let cancelled = false;
-    const hadDetail = detail !== null;
-    const manualRefresh = refreshToken > 0;
+    const hadDetail = loadedRunId === runId && detail !== null;
+    const manualRefresh = hadDetail && refreshToken > 0;
     setLoading(true);
     if (!hadDetail) {
-      setError(null);
+      clearToast();
     }
+    setErrorState(null);
     getRunDetail(runId)
       .then((response) => {
         if (cancelled) {
@@ -39,9 +51,10 @@ export function RunDetailPage() {
         }
         addKnownRunId(response.run.id);
         setDetail(response);
-        setError(null);
+        setLoadedRunId(runId);
+        setErrorState(null);
         if (manualRefresh) {
-          showToast({ message: "Data refreshed", tone: "success" });
+          showToast({ messageKey: "common.dataRefreshed", tone: "success" });
         }
       })
       .catch((nextError: unknown) => {
@@ -49,10 +62,9 @@ export function RunDetailPage() {
           return;
         }
         const displayError = toDisplayError(nextError);
+        setErrorState({ runId, error: displayError });
         if (hadDetail) {
-          showToast({ message: "Refresh failed", tone: "error" });
-        } else {
-          setError(displayError);
+          showToast({ messageKey: "common.refreshFailed", tone: "error" });
         }
       })
       .finally(() => {
@@ -63,10 +75,10 @@ export function RunDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [runId, refreshToken, showToast]);
+  }, [runId, refreshToken, showToast, clearToast]);
 
-  const status = detail ? getRunStatusPresentation(detail.run.status) : null;
-  const initialLoading = loading && detail === null;
+  const status = currentDetail ? getRunStatusPresentation(currentDetail.run.status, t) : null;
+  const initialLoading = currentDetail === null && currentError === null;
 
   function refreshDetail() {
     if (!loading) {
@@ -77,75 +89,76 @@ export function RunDetailPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Run Detail"
-        eyebrow="Run-scoped view"
-        description="This page reads one backend run by ID from /api/v1."
+        title={t("runDetail.title")}
+        eyebrow={t("runDetail.eyebrow")}
+        description={t("runDetail.description")}
         actions={
           <ActionButton
             type="button"
             className="action-button--compact"
             onClick={refreshDetail}
-            aria-busy={loading && detail !== null}
+            aria-busy={loading && currentDetail !== null}
+            disabled={loading}
           >
-            Refresh
+            {t("common.refresh")}
           </ActionButton>
         }
       />
-      {initialLoading ? <LoadingState label="Loading run detail..." /> : null}
-      {error && !detail ? <ErrorState error={error} /> : null}
-      {detail ? (
+      {initialLoading ? <LoadingState label={t("runDetail.loading")} /> : null}
+      {currentError ? <ErrorState error={currentError} /> : null}
+      {currentDetail ? (
         <>
           <div className="run-detail-grid">
             <div className="run-detail-grid__main">
               <section className="panel">
                 <div className="panel__header">
-                  <h2>Controlled Outcome</h2>
+                  <h2>{t("runDetail.outcome")}</h2>
                   {status ? <StatusChip label={status.label} tone={status.tone} title={status.description} /> : null}
                 </div>
                 <p>{status?.description}</p>
-                {detail.final_summary ? <p>{detail.final_summary}</p> : null}
-                {detail.run.error_message ? (
+                {currentDetail.final_summary ? <p>{currentDetail.final_summary}</p> : null}
+                {currentDetail.run.error_message ? (
                   <div className="state-box state-box--error">
-                    <strong>{detail.run.error_type ?? "run_error"}</strong>
-                    <span>{detail.run.error_message}</span>
+                    <strong>{currentDetail.run.error_type ?? "run_error"}</strong>
+                    <span>{currentDetail.run.error_message}</span>
                   </div>
                 ) : null}
               </section>
               <section className="panel">
                 <div className="panel__header">
-                  <h2>Records for this run</h2>
+                  <h2>{t("runDetail.records")}</h2>
                   <div className="run-links">
-                    <Link to={`/runs/${detail.run.id}/approvals`}>Approvals</Link>
-                    <Link to={`/runs/${detail.run.id}/tool-calls`}>Tool Calls</Link>
-                    <Link to={`/runs/${detail.run.id}/audit`}>Audit Trail</Link>
+                    <Link to={`/runs/${currentDetail.run.id}/approvals`}>{t("common.approvals")}</Link>
+                    <Link to={`/runs/${currentDetail.run.id}/tool-calls`}>{t("common.toolCalls")}</Link>
+                    <Link to={`/runs/${currentDetail.run.id}/audit`}>{t("common.auditTrail")}</Link>
                   </div>
                 </div>
-                <p className="muted">Counts and links below are scoped to this backend run only.</p>
+                <p className="muted">{t("runDetail.recordsDescription")}</p>
                 <div className="metric-grid">
                   <div className="mini-metric">
-                    <span>Approvals</span>
-                    <strong>{detail.approval ? 1 : 0}</strong>
+                    <span>{t("common.approvals")}</span>
+                    <strong>{currentDetail.approval ? 1 : 0}</strong>
                   </div>
                   <div className="mini-metric">
-                    <span>Tool calls</span>
-                    <strong>{detail.tool_calls.length}</strong>
+                    <span>{t("common.toolCalls")}</span>
+                    <strong>{currentDetail.tool_calls.length}</strong>
                   </div>
                   <div className="mini-metric">
-                    <span>Audit events</span>
-                    <strong>{detail.audit_events.length}</strong>
+                    <span>{t("common.auditEvents")}</span>
+                    <strong>{currentDetail.audit_events.length}</strong>
                   </div>
                 </div>
               </section>
-              <ToolCallsTable toolCalls={detail.tool_calls.slice(0, 3)} />
+              <ToolCallsTable toolCalls={currentDetail.tool_calls.slice(0, 3)} />
             </div>
-            <RunSummaryPanel run={detail.run} showLinks={false} />
+            <RunSummaryPanel run={currentDetail.run} showLinks={false} />
           </div>
-          <InspectorPanel title="Run Detail JSON">
-            <JsonViewer value={detail} />
+          <InspectorPanel title={t("runDetail.json")}>
+            <JsonViewer value={currentDetail} />
           </InspectorPanel>
         </>
       ) : null}
-      <Toast toast={toast} />
+      <Toast toast={currentDetail ? toast : null} />
     </div>
   );
 }

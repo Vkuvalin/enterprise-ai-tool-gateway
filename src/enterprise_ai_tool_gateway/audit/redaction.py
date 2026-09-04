@@ -49,11 +49,28 @@ SENSITIVE_KEY_PHRASES = frozenset(
 )
 SENSITIVE_VALUE_PATTERNS = (
     re.compile(
-        r"\bauthorization\s*:\s*(?:bearer|basic|token)\s+\S+",
+        (
+            r"(?:^|[{,])\s*(?P<key_quote>['\"])authorization(?P=key_quote)"
+            r"\s*:\s*(?P<value_quote>['\"])(?:bearer|basic|token)\s+"
+            r"[^'\"\s,;]+(?P=value_quote)"
+        ),
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bauthorization\b\s*[:=]\s*['\"]?(?:bearer|basic|token)\s+\S+",
         re.IGNORECASE,
     ),
     re.compile(
         r"\bbearer\s+(?:sk-[A-Za-z0-9_-]+|[A-Za-z0-9._~+/=-]{8,})\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        (
+            r"(?:^|[{,])\s*(?P<key_quote>['\"])"
+            r"(?:api[_\s-]*key|access[_\s-]*token|refresh[_\s-]*token|"
+            r"client[_\s-]*secret|password|secret|token)(?P=key_quote)"
+            r"\s*:\s*(?P<value_quote>['\"])[^'\"]+(?P=value_quote)"
+        ),
         re.IGNORECASE,
     ),
     re.compile(

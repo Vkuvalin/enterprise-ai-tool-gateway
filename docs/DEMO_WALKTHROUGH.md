@@ -69,6 +69,7 @@ Default provider mode — `mock`. Real-provider credentials не нужны дл
 ```bash
 cd frontend
 npm install
+cd ..
 ```
 
 Самый быстрый запуск на Windows:
@@ -77,7 +78,7 @@ npm install
 run_demo.cmd
 ```
 
-Runner запускает оба локальных сервиса, ожидает готовности и открывает dashboard. Используйте manual commands ниже как fallback path или когда удобнее работать в отдельных терминалах.
+Runner не устанавливает dependencies автоматически. Он запускает оба локальных сервиса, ожидает backend health, положительно проверяет frontend по project marker и proxied API health, затем открывает dashboard. Уже готовые services переиспользуются без ownership; `Q` останавливает только процессы текущего runner instance. Используйте manual commands ниже как fallback path или когда удобнее работать в отдельных терминалах.
 
 ## 3. Запуск backend
 
@@ -128,6 +129,8 @@ http://127.0.0.1:5173/dashboard
 Frontend API client по умолчанию вызывает `/api/v1`. Vite проксирует `/api` на backend по адресу `http://localhost:8000`, поэтому browser requests к `/api/v1/...` попадают в FastAPI endpoints `/api/v1`.
 
 ## 5. Первый экран: Dashboard и Settings
+
+Fresh browser session открывается на русском языке. Переключите `RU → EN → RU` через locale control без reload и убедитесь, что текущие form values, Open Run input, run/approval selection и last outcome сохраняются. Названия labels ниже даны в английском варианте для однозначной ссылки; RU/EN меняет только presentation, а raw JSON, UUIDs, JSON/request keys, canonical enum/status values и backend-provided text остаются исходными.
 
 На `/dashboard` проверьте основные индикаторы локального demo:
 
@@ -221,6 +224,8 @@ http://127.0.0.1:5173/workflows/procurement
 
 Отправьте форму через `Submit procurement request`.
 
+Synthetic Procurement API contract является USD-only: другое currency value отклоняется с HTTP 422. При resolution поле `Decided by` должно оставаться непустым; blank или whitespace-only actor также отклоняется с HTTP 422.
+
 Ожидаемый initial controlled outcome:
 
 * status: `WAITING_FOR_APPROVAL`;
@@ -306,7 +311,7 @@ Run-scoped frontend pages:
 | `/runs/{run_id}/tool-calls` | Run Tool Calls: tool names, tool types, statuses, approval links, safe errors и redacted input/output payloads.           |
 | `/runs/{run_id}/audit`      | Run Audit Trail: chronological audit events, actors и selected event payload JSON.                                        |
 
-Страница Agent Runs — это session-known index, построенный из browser-local run IDs. У backend сейчас нет global run listing endpoint. Local known-run index — это demo convenience, а не backend truth.
+Страница Agent Runs — это session-known index, построенный из browser-local run IDs. У backend сейчас нет global run listing endpoint. Local known-run index — это demo convenience, а не backend truth. UI отдельно показывает complete, partial, unavailable и stale/error state: failed или partial read не должен выглядеть как authoritative empty/current result, а данные и actions под run/approval route принадлежат только текущему ID.
 
 Чтобы проверить существующий run, вставьте его `run_id` в control `Open Run` на Dashboard или Settings. Если backend знает этот run, UI добавит его в local known-run index и откроет страницу run detail.
 
@@ -356,6 +361,14 @@ Backend root `/` возвращает 404:
 Frontend не может подключиться к API:
 
 Убедитесь, что backend запущен на порту 8000, а frontend запущен через Vite dev server. Frontend вызывает `/api/v1`, а Vite проксирует `/api` на `http://localhost:8000`.
+
+Runner сообщает conflict на порту 5173:
+
+Это означает, что service не прошёл exact Gateway marker + proxied `/api/v1/health` identity probe. Произвольный HTTP 2xx/3xx server и marker без working API proxy не переиспользуются и не останавливаются runner-ом. Освободите port или запустите корректный Gateway frontend.
+
+Runner cleanup и logs:
+
+Per-instance metadata находится в `.runtime/instances/<instance-id>/`, а logs — в `.runtime/logs/<instance-id>/`. `Q` останавливает только services, запущенные текущим window. Чтобы остановить все verified runner-owned instances, выполните `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1`; unverifiable processes/records остаются нетронутыми для безопасной диагностики.
 
 `npm` отсутствует в PATH на Windows:
 

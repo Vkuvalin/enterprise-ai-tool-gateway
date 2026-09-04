@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiBaseUrl } from "../api/client";
 import { toDisplayError } from "../api/errors";
@@ -13,19 +13,31 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { StatusChip } from "../components/status/StatusChip";
 import { CapabilitiesPanel } from "../features/capabilities/CapabilitiesPanel";
 import { useApiStatus } from "../features/capabilities/useApiStatus";
+import { useLocale } from "../i18n/LocaleProvider";
 import { addKnownRunId, clearKnownRuns, removeKnownRunId, useKnownRuns } from "../state/knownRuns";
 
 export function SettingsPage() {
+  const { t } = useLocale();
   const navigate = useNavigate();
   const { knownRunIds } = useKnownRuns();
   const { toast, showToast } = useToast();
-  const { health, capabilities, loading, hasLoaded, error, refresh } = useApiStatus({
-    onRefreshSuccess: () => showToast({ message: "Data refreshed", tone: "success" }),
-    onRefreshError: () => showToast({ message: "Refresh failed", tone: "error" })
+  const { health, capabilities, loading, hasLoaded, stale, error, refresh } = useApiStatus({
+    onRefreshSuccess: () => showToast({ messageKey: "common.dataRefreshed", tone: "success" }),
+    onRefreshError: () => showToast({ messageKey: "common.refreshFailed", tone: "error" })
   });
   const [manualRunId, setManualRunId] = useState("");
   const [openError, setOpenError] = useState<NormalizedApiError | null>(null);
   const [openingRun, setOpeningRun] = useState(false);
+  const mountedRef = useRef(false);
+  const openRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      openRequestIdRef.current += 1;
+    };
+  }, []);
 
   async function openRun(event: FormEvent) {
     event.preventDefault();
@@ -33,17 +45,25 @@ export function SettingsPage() {
     if (!candidateRunId) {
       return;
     }
+    const requestId = ++openRequestIdRef.current;
     setOpeningRun(true);
     setOpenError(null);
     try {
       const response = await getRunDetail(candidateRunId);
+      if (!mountedRef.current || openRequestIdRef.current !== requestId) {
+        return;
+      }
       addKnownRunId(response.run.id);
       setManualRunId("");
       navigate(`/runs/${response.run.id}`);
     } catch (nextError) {
-      setOpenError(toDisplayError(nextError));
+      if (mountedRef.current && openRequestIdRef.current === requestId) {
+        setOpenError(toDisplayError(nextError));
+      }
     } finally {
-      setOpeningRun(false);
+      if (mountedRef.current && openRequestIdRef.current === requestId) {
+        setOpeningRun(false);
+      }
     }
   }
 
@@ -58,9 +78,9 @@ export function SettingsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Settings / API Status"
-        eyebrow="Local client settings"
-        description="This page shows API connectivity and local run index controls only."
+        title={t("settings.title")}
+        eyebrow={t("settings.eyebrow")}
+        description={t("settings.description")}
         actions={
           <ActionButton
             type="button"
@@ -68,72 +88,73 @@ export function SettingsPage() {
             onClick={refreshApiStatus}
             aria-busy={loading && hasLoaded}
           >
-            Refresh API Status
+            {t("settings.refreshApi")}
           </ActionButton>
         }
       />
-      {initialLoading ? <LoadingState label="Loading API status..." /> : null}
-      {error && !hasLoaded ? <ErrorState error={error} /> : null}
+      {initialLoading ? <LoadingState label={t("settings.loading")} /> : null}
+      {error ? <ErrorState error={error} /> : null}
       <div className="content-with-inspector">
         <section className="panel">
-          <h2>Client Boundary</h2>
+          <h2>{t("settings.clientBoundary")}</h2>
           <div className="kv-grid">
-            <span>API base URL</span>
+            <span>{t("settings.apiBaseUrl")}</span>
             <code>{apiBaseUrl}</code>
-            <span>Health</span>
-            <StatusChip label={health?.status ?? "unknown"} tone={health?.status === "ok" ? "green" : "gray"} />
-            <span>Provider mode</span>
-            <StatusChip label={capabilities?.provider_mode ?? "unknown"} tone="purple" />
-            <span>Model selection</span>
+            <span>{t("common.health")}</span>
             <StatusChip
-              label={capabilities?.model_selection.enabled ? "enabled" : "disabled"}
+              label={`${health?.status ?? t("common.unknown")}${stale ? ` (${t("common.stale")})` : ""}`}
+              tone={stale ? "orange" : health?.status === "ok" ? "green" : "gray"}
+              title={stale ? t("capabilities.lastRefreshFailed") : undefined}
+            />
+            <span>{t("common.providerMode")}</span>
+            <StatusChip label={capabilities?.provider_mode ?? t("common.unknown")} tone="purple" />
+            <span>{t("common.modelSelection")}</span>
+            <StatusChip
+              label={capabilities?.model_selection.enabled ? t("common.enabled") : t("common.disabled")}
               tone={capabilities?.model_selection.enabled ? "orange" : "gray"}
             />
           </div>
-          <p className="muted">
-            The frontend calls FastAPI through /api/v1 and does not import backend internals. Local browser storage
-            stores run IDs only.
-          </p>
+          <p className="muted">{t("settings.boundaryDescription")}</p>
           <JsonViewer
             value={{
               health,
               capabilities
             }}
-            label="API status payloads"
+            label={t("settings.apiPayloads")}
           />
         </section>
-        <CapabilitiesPanel health={health} capabilities={capabilities} />
+        <CapabilitiesPanel health={health} capabilities={capabilities} stale={stale} />
       </div>
       <section className="panel">
         <div className="panel__header">
-          <h2>Known Run Index</h2>
+          <h2>{t("settings.knownRunIndex")}</h2>
         </div>
         <div className="known-run-actions">
           <form className="inline-form inline-form--compact" onSubmit={openRun}>
             <input
-              aria-label="Add run ID"
-              placeholder="Paste run_id"
+              aria-label={t("common.addRunAria")}
+              placeholder={t("common.pasteRunId")}
               value={manualRunId}
               onChange={(event) => setManualRunId(event.target.value)}
             />
             <ActionButton type="submit" variant="primary" className="action-button--compact" disabled={openingRun}>
-              {openingRun ? "Opening..." : "Open Run"}
+              {openingRun ? t("common.opening") : t("common.openRun")}
             </ActionButton>
           </form>
           <ActionButton type="button" className="action-button--compact" onClick={clearKnownRuns}>
-            Clear known runs
+            {t("settings.clearKnownRuns")}
           </ActionButton>
         </div>
         {openError ? <ErrorState error={openError} /> : null}
         <div className="run-id-list">
-          {knownRunIds.length === 0 ? <p className="muted">No run IDs stored.</p> : null}
+          {knownRunIds.length === 0 ? <p className="muted">{t("settings.noRunIds")}</p> : null}
           {knownRunIds.map((runId) => (
             <div className="run-id-list__row" key={runId}>
               <Link to={`/runs/${runId}`}>
                 <code>{runId}</code>
               </Link>
               <button className="ghost-button" type="button" onClick={() => removeKnownRunId(runId)}>
-                Remove
+                {t("settings.remove")}
               </button>
             </div>
           ))}

@@ -13,7 +13,7 @@ Backend демонстрирует контролируемое использо
 | `src/enterprise_ai_tool_gateway/` | Python backend package для contracts, runtimes, tools, policy, approval, audit, persistence, providers, API и eval support. |
 | `frontend/`                       | Независимый локальный web client на React, TypeScript и Vite.                                                               |
 | `tests/`                          | Offline deterministic Python test suite для backend, API, eval и boundary behavior.                                         |
-| `scripts/`                        | Ручные command entrypoints, включая deterministic eval runner и explicit smoke utilities.                                   |
+| `scripts/`                        | Command entrypoints, включая deterministic eval runner, safe local demo runner и explicit smoke utilities.                  |
 | `docs/`                           | Публичная проектная документация и source-of-truth companion docs.                                                          |
 | `pyproject.toml`                  | Метаданные Python package, Python `>=3.14`, runtime dependencies и tool configuration.                                      |
 
@@ -41,6 +41,7 @@ flowchart TB
     Frontend --> Features["src/features<br/>workflow/run/approval/audit modules"]
     Frontend --> Components["src/components<br/>shared UI building blocks"]
     Frontend --> State["src/state<br/>local known-run index"]
+    Frontend --> I18n["src/i18n<br/>typed RU/EN presentation"]
     Frontend --> Styles["src/styles<br/>tokens and global CSS"]
 
     Scripts --> RunEval["run_eval.py<br/>deterministic acceptance runner"]
@@ -196,7 +197,8 @@ Control foundation разделён между специализированн�
 * Unknown tools приводят к validation failure; runtimes не угадывают и не autocorrect tool names.
 * Default policy включает `AUTO_APPROVE` safety floor: critical risk переводится в manual review, high-risk state-changing calls всё равно требуют approval, а tools, помеченные как approval-required by default, всё равно требуют approval.
 * Public projection усилена за счёт mapping tool input/output payloads и approval free-text fields через redaction helpers перед API response.
-* Audit event creation выполняет redaction payloads до persistence.
+* Approval resolve request требует непустой `decided_by`; persistence conditional update назначает единственного pending-to-terminal owner, а concurrent loser получает controlled `409 state_conflict` до downstream terminal mutations.
+* Audit event creation выполняет recursive marker-based redaction payloads до persistence, включая high-confidence quoted/serialized credential assignments; это не general-purpose DLP.
 
 Boundary rules:
 
@@ -225,7 +227,7 @@ Persisted record types:
 * approvals;
 * audit events.
 
-Boundary rule: `db/` сохраняет facts, выбранные runtime layers. Он не определяет policy, не authorizes tools, не валидирует provider semantics, не enforces workflow transitions и не выбирает public API projection rules.
+Boundary rule: `db/` сохраняет facts, выбранные runtime layers. Он не определяет policy, не authorizes tools, не валидирует provider semantics, не выбирает general workflow outcomes и не выбирает public API projection rules. `GatewayRepository` владеет только узким atomic pending-to-terminal approval claim, который не допускает двух terminal owners.
 
 ## 9. Provider/MCP boundaries
 
@@ -281,6 +283,15 @@ Manual utility scripts:
 | `scripts/mcp_smoke.py`             | Manual local MCP boundary smoke utility.                                        |
 | `scripts/manual_gigachat_smoke.py` | Explicit/manual GigaChat smoke utility; он не должен быть частью default tests. |
 
+Local Windows demo entrypoints:
+
+| Path                             | Назначение                                                                                                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run_demo.cmd`                   | One-click Windows wrapper для `scripts/demo/run_demo.ps1`.                                                                                                 |
+| `scripts/demo/run_demo.ps1`      | Запускает или безопасно reuses backend/frontend, создаёт отдельный runner instance, проверяет frontend marker + proxied API health и открывает Dashboard. |
+| `scripts/demo/runner_common.ps1` | Общие helpers для immutable metadata, PID/start/command/tree ownership proof и fail-closed cleanup.                                                        |
+| `scripts/demo/stop_demo.ps1`     | Останавливает все и только verified runner-owned instance trees; legacy shared PID files и unverifiable records не являются kill authority.               |
+
 ## 11. Frontend package map
 
 `frontend/` — независимый React, TypeScript и Vite client. Он не является частью Python package и не импортирует backend internals.
@@ -289,8 +300,10 @@ Manual utility scripts:
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `frontend/package.json`    | Frontend package metadata и scripts: `dev`, `typecheck`, `build`, `preview`.                                                                                |
 | `frontend/vite.config.ts`  | Vite React configuration и локальный `/api` proxy к `http://localhost:8000`.                                                                                |
+| `frontend/public/gateway-demo-marker.txt` | Project-owned static identity marker для demo runner; проверяется вместе с proxied `/api/v1/health`.                                             |
 | `frontend/src/api/`        | Все HTTP calls к backend surface `/api/v1`, frontend API types и API error handling.                                                                        |
 | `frontend/src/app/`        | App shell и React Router route definitions.                                                                                                                 |
+| `frontend/src/i18n/`       | Typed RU/EN presentation catalog, locale provider/storage и canonical-value presentation mappings.                                                          |
 | `frontend/src/pages/`      | Page-level screens для dashboard, workflow catalog, workflow submit pages, run detail, run-scoped approvals/tool calls/audit, session approvals и settings. |
 | `frontend/src/features/`   | Feature modules для workflows, approvals, runs, tool calls, audit и capabilities/API status.                                                                |
 | `frontend/src/components/` | Reusable layout, feedback, data, form и status components.                                                                                                  |
@@ -302,7 +315,9 @@ Frontend boundary rules:
 
 * `frontend/src/api/` владеет backend communication.
 * Frontend types отражают public API payloads; они не импортируют Python contracts.
-* Local known-run index хранит browser-local run IDs для demo session. Это не backend global search и не production queue.
+* Local known/selected-run state и locale preference являются browser-local convenience state и безопасно деградируют при storage failure. Это не backend global search и не production queue.
+* Aggregate reads не маскируют partial/unavailable state под authoritative empty, а run/approval views, drafts, controls и async feedback остаются scoped к текущему entity ID.
+* RU/EN меняет presentation only; RU является fresh-session default, а raw JSON, IDs, JSON keys, canonical enums и backend-provided text остаются canonical.
 * Frontend отображает backend-controlled outcomes; он не вызывает providers, не выполняет tools, не оценивает policy, не approves actions locally и не читает SQLite database.
 
 ## 12. Карта tests
@@ -316,7 +331,7 @@ Frontend boundary rules:
 | Tools and registry/executor    | `test_tools.py`, `test_access_tools.py`, `test_procurement_tools.py`, `test_maintenance_tools.py`.                       |
 | Policy and approval primitives | `test_policy.py`, `test_approval.py`.                                                                                    |
 | Application runtimes           | `test_access_runtime.py`, `test_procurement_runtime.py`, `test_maintenance_runtime.py`, `test_demo_workflow_helpers.py`. |
-| API routes and public mappers  | `test_api_health_capabilities.py`, `test_api_workflows.py`, `test_api_approvals_runs.py`, `test_api_mappers.py`.         |
+| API routes and public mappers  | `test_api_health_capabilities.py`, `test_api_workflows.py`, `test_api_approvals_runs.py`, `test_api_approval_concurrency.py`, `test_api_mappers.py`. |
 | Audit and redaction            | `test_audit.py`, plus API mapper/readback tests for public projection.                                                   |
 | Persistence                    | `test_db.py`.                                                                                                            |
 | Evals                          | `test_evals.py`.                                                                                                         |
@@ -400,6 +415,8 @@ Ignored и local-only artifacts включают:
 | `frontend/dist/`                                                        | Ignored Vite build output.                                                                                    |
 | `frontend/.vite/`                                                       | Ignored Vite cache.                                                                                           |
 | `.venv/`, `.pytest_cache/`, `.ruff_cache/`, `.pyright/`, `__pycache__/` | Ignored local Python/tool caches.                                                                             |
+| `.runtime/instances/<instance-id>/`                                    | Per-runner instance metadata; service records существуют только для processes, запущенных этим instance.      |
+| `.runtime/logs/<instance-id>/`                                         | Per-instance backend/frontend logs; могут оставаться после cleanup для диагностики.                           |
 | `/data/`, `*.db`, `*.sqlite`, `*.sqlite3`, `*.log`                      | Ignored local runtime data и logs.                                                                            |
 | `.env`, `.env.*` except `.env.example`                                  | Ignored local environment и secret files.                                                                     |
 | `*.diff`, `*.patch`                                                     | Ignored local review/diff artifacts.                                                                          |

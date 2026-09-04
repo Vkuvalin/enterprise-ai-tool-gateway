@@ -8,11 +8,14 @@ import { useApiStatus } from "../features/capabilities/useApiStatus";
 import { WorkflowResultPanel } from "../features/workflows/WorkflowResultPanel";
 import { WorkflowSafetyPanel } from "../features/workflows/WorkflowSafetyPanel";
 import { getWorkflowByKey } from "../features/workflows/registry";
+import { useLocale } from "../i18n/LocaleProvider";
+import { getAccessLevelLabel, getApprovalModeLabel } from "../i18n/presentation";
 import { addKnownRunId } from "../state/knownRuns";
 
 const workflow = getWorkflowByKey("access");
 
 export function AccessRequestPage() {
+  const { t } = useLocale();
   const { capabilities } = useApiStatus();
   const approvalModes = capabilities?.approval_modes ?? ["HIGH_RISK_ONLY"];
   const [form, setForm] = useState<AccessSubmitRequest>({
@@ -46,15 +49,19 @@ export function AccessRequestPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Access Request" eyebrow="Workflow submit" description={workflow.description} />
+      <PageHeader
+        title={t(workflow.titleKey)}
+        eyebrow={t("workflows.form.eyebrow")}
+        description={t(workflow.descriptionKey)}
+      />
       <div className="content-with-inspector">
         <form className="form-panel" onSubmit={(event) => void onSubmit(event)}>
           <label>
-            User ID
+            {t("workflows.form.userId")}
             <input value={form.user_id} onChange={(event) => setForm({ ...form, user_id: event.target.value })} />
           </label>
           <label>
-            Request text
+            {t("workflows.form.requestText")}
             <textarea
               value={form.request_text}
               onChange={(event) => setForm({ ...form, request_text: event.target.value })}
@@ -63,34 +70,34 @@ export function AccessRequestPage() {
           </label>
           <div className="form-grid">
             <label>
-              Employee ID
+              {t("workflows.access.employeeId")}
               <input
                 value={form.employee_id ?? ""}
                 onChange={(event) => setForm({ ...form, employee_id: event.target.value || null })}
               />
             </label>
             <label>
-              System ID
+              {t("workflows.access.systemId")}
               <input
                 value={form.system_id ?? ""}
                 onChange={(event) => setForm({ ...form, system_id: event.target.value || null })}
               />
             </label>
             <label>
-              Access level
+              {t("workflows.access.accessLevel")}
               <select
                 value={form.access_level ?? ""}
                 onChange={(event) =>
                   setForm({ ...form, access_level: event.target.value as AccessSubmitRequest["access_level"] })
                 }
               >
-                <option value="READ">READ</option>
-                <option value="WRITE">WRITE</option>
-                <option value="ADMIN">ADMIN</option>
+                <option value="READ">{getAccessLevelLabel("READ", t)}</option>
+                <option value="WRITE">{getAccessLevelLabel("WRITE", t)}</option>
+                <option value="ADMIN">{getAccessLevelLabel("ADMIN", t)}</option>
               </select>
             </label>
             <label>
-              Duration days
+              {t("workflows.access.durationDays")}
               <input
                 type="number"
                 min={1}
@@ -101,21 +108,21 @@ export function AccessRequestPage() {
               />
             </label>
             <label>
-              Approval mode
+              {t("workflows.form.approvalMode")}
               <select
                 value={form.approval_mode}
                 onChange={(event) => setForm({ ...form, approval_mode: event.target.value })}
               >
                 {approvalModes.map((mode) => (
                   <option key={mode} value={mode}>
-                    {mode}
+                    {getApprovalModeLabel(mode, t)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
           <label>
-            Justification
+            {t("workflows.form.justification")}
             <textarea
               value={form.justification ?? ""}
               onChange={(event) => setForm({ ...form, justification: event.target.value || null })}
@@ -124,7 +131,7 @@ export function AccessRequestPage() {
           </label>
           {error ? <ErrorState error={error} /> : null}
           <ActionButton type="submit" variant="primary" disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit access request"}
+            {submitting ? t("workflows.form.submitting") : t("workflows.access.submit")}
           </ActionButton>
         </form>
         <div className="stack">

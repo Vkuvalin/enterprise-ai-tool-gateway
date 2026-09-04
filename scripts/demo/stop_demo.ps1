@@ -5,8 +5,13 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $RuntimeDir = Join-Path $RepoRoot ".runtime"
-$BackendPidFile = Join-Path $RuntimeDir "demo-backend.pid"
-$FrontendPidFile = Join-Path $RuntimeDir "demo-frontend.pid"
+$InstancesDir = Join-Path $RuntimeDir "instances"
+$LegacyPidFiles = @(
+    (Join-Path $RuntimeDir "demo-backend.pid"),
+    (Join-Path $RuntimeDir "demo-frontend.pid")
+)
+
+. (Join-Path $PSScriptRoot "runner_common.ps1")
 
 function Write-Info {
     param([string]$Message)
@@ -18,127 +23,77 @@ function Write-WarningLine {
     Write-Host "[stop-demo] WARNING: $Message" -ForegroundColor Yellow
 }
 
-function Get-ProcessCommandLine {
-    param([int]$ProcessId)
-
-    try {
-        $process = Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction Stop
-        return $process.CommandLine
-    }
-    catch {
-        try {
-            $process = Get-WmiObject Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction Stop
-            return $process.CommandLine
-        }
-        catch {
-            return $null
-        }
-    }
+$legacyFound = @($LegacyPidFiles | Where-Object { Test-Path -LiteralPath $_ })
+if ($legacyFound.Count -gt 0) {
+    Write-WarningLine "Legacy shared PID files were found and intentionally ignored because they do not prove per-instance ownership."
 }
 
-function Get-ChildProcessIds {
-    param([int]$ParentProcessId)
-
-    $children = @()
-    try {
-        $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentProcessId" -ErrorAction Stop)
-    }
-    catch {
-        try {
-            $children = @(Get-WmiObject Win32_Process -Filter "ParentProcessId=$ParentProcessId" -ErrorAction Stop)
-        }
-        catch {
-            $children = @()
-        }
-    }
-
-    $ids = @()
-    foreach ($child in $children) {
-        $childId = [int]$child.ProcessId
-        $ids += $childId
-        $ids += Get-ChildProcessIds -ParentProcessId $childId
-    }
-    return $ids
+if (-not (Test-Path -LiteralPath $InstancesDir)) {
+    Write-Info "No per-instance runner metadata found."
+    exit 0
 }
 
-function Test-CommandLineMarkers {
-    param(
-        [int]$ProcessId,
-        [string[]]$Markers
-    )
-
-    $commandLine = Get-ProcessCommandLine -ProcessId $ProcessId
-    if ([string]::IsNullOrWhiteSpace($commandLine)) {
-        return $false
+$hadRefusal = $false
+$instanceDirectories = @(Get-ChildItem -LiteralPath $InstancesDir -Directory -Force -ErrorAction Stop)
+foreach ($instanceDirectoryItem in $instanceDirectories) {
+    if (($instanceDirectoryItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        Write-WarningLine "Ignoring reparse-point instance directory: $($instanceDirectoryItem.FullName)"
+        $hadRefusal = $true
+        continue
     }
 
-    foreach ($marker in $Markers) {
-        if ($commandLine -notlike "*$marker*") {
-            return $false
+    $instanceId = $instanceDirectoryItem.Name
+    if ($instanceId -notmatch '^[0-9a-f]{32}$') {
+        Write-WarningLine "Ignoring unrecognized instance directory: $($instanceDirectoryItem.FullName)"
+        $hadRefusal = $true
+        continue
+    }
+
+    foreach ($service in @("frontend", "backend")) {
+        $metadataPath = Join-Path $instanceDirectoryItem.FullName "$service.json"
+        if (-not (Test-Path -LiteralPath $metadataPath)) {
+            continue
+        }
+
+        $loaded = Read-DemoOwnershipRecord `
+            -MetadataPath $metadataPath `
+            -ExpectedInstanceId $instanceId `
+            -ExpectedService $service `
+            -RepoRoot $RepoRoot
+        if (-not $loaded.IsValid) {
+            Write-WarningLine "Refusing invalid $service metadata at ${metadataPath}: $($loaded.Error)"
+            $hadRefusal = $true
+            continue
+        }
+
+        $result = Stop-DemoOwnedProcess `
+            -OwnershipRecord $loaded.Record `
+            -RepoRoot $RepoRoot `
+            -MessagePrefix "stop-demo"
+        if ($result.CanRemoveMetadata) {
+            if (-not (Remove-DemoOwnershipRecordIfMatching `
+                -MetadataPath $metadataPath `
+                -OwnershipRecord $loaded.Record `
+                -RepoRoot $RepoRoot `
+                -MessagePrefix "stop-demo")) {
+                $hadRefusal = $true
+            }
+        }
+        else {
+            $hadRefusal = $true
         }
     }
 
-    return $true
+    Remove-DemoInstanceMetadataIfEmpty `
+        -InstanceDirectory $instanceDirectoryItem.FullName `
+        -InstanceId $instanceId `
+        -MessagePrefix "stop-demo"
 }
 
-function Stop-RecordedProcess {
-    param(
-        [string]$Name,
-        [string]$PidFile,
-        [string[]]$Markers
-    )
-
-    if (-not (Test-Path $PidFile)) {
-        Write-Info "No $Name PID file found at $PidFile."
-        return
-    }
-
-    $rawPid = (Get-Content -Path $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
-    $processId = 0
-    if (-not [int]::TryParse($rawPid, [ref]$processId)) {
-        Write-WarningLine "Invalid $Name PID file; removing $PidFile."
-        Remove-Item -Path $PidFile -Force -ErrorAction SilentlyContinue
-        return
-    }
-
-    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-    if (-not $process) {
-        Write-Info "$Name PID $processId is not running; removing stale PID file."
-        Remove-Item -Path $PidFile -Force -ErrorAction SilentlyContinue
-        return
-    }
-
-    if (-not (Test-CommandLineMarkers -ProcessId $processId -Markers $Markers)) {
-        Write-WarningLine "PID $processId does not match the expected $Name command. Leaving it running and removing the stale PID file."
-        Remove-Item -Path $PidFile -Force -ErrorAction SilentlyContinue
-        return
-    }
-
-    $processIds = @(Get-ChildProcessIds -ParentProcessId $processId)
-    [array]::Reverse($processIds)
-    $processIds += $processId
-    $uniqueProcessIds = @($processIds | Select-Object -Unique)
-
-    foreach ($id in $uniqueProcessIds) {
-        $target = Get-Process -Id $id -ErrorAction SilentlyContinue
-        if ($target) {
-            Write-Info "Stopping $Name-owned process $id."
-            Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    Remove-Item -Path $PidFile -Force -ErrorAction SilentlyContinue
-    Write-Info "Removed $Name PID file."
+if ($hadRefusal) {
+    Write-WarningLine "Stop script finished with one or more unverifiable records left untouched."
+    exit 1
 }
 
-Stop-RecordedProcess `
-    -Name "backend" `
-    -PidFile $BackendPidFile `
-    -Markers @("enterprise_ai_tool_gateway.api.http.app:app", "--port 8000")
-
-Stop-RecordedProcess `
-    -Name "frontend" `
-    -PidFile $FrontendPidFile `
-    -Markers @("run dev", "--port 5173")
-
-Write-Info "Stop script finished."
+Write-Info "Stop script finished; all verified runner-owned instances are stopped."
+exit 0

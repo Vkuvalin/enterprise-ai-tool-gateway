@@ -147,6 +147,37 @@ textarea {
   gap: 0.75rem;
 }
 
+.locale-switch {
+  display: inline-flex;
+  padding: 0.15rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.locale-switch__button {
+  min-width: 2.25rem;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: calc(var(--radius-small) - 2px);
+  color: var(--text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.locale-switch__button[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--blue-soft);
+}
+
+.locale-switch__button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
 .app-shell__body {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
@@ -580,6 +611,12 @@ textarea {
 
 .state-box--empty {
   color: var(--text-muted);
+}
+
+.state-box--warning {
+  border-color: rgba(247, 200, 75, 0.45);
+  color: var(--yellow);
+  background: var(--yellow-soft);
 }
 
 .state-box--error {

@@ -40,7 +40,7 @@ API и frontend являются локальными/demo surfaces. Backend API
 
 ## 3. Модель слоёв
 
-Frontend client находится в `frontend/`. Это независимое приложение на React, TypeScript и Vite. Оно обращается к backend через `frontend/src/api` и хранит browser-local known-run index в `frontend/src/state`.
+Frontend client находится в `frontend/`. Это независимое приложение на React, TypeScript и Vite. Оно обращается к backend через `frontend/src/api`, хранит browser-local known-run state в `frontend/src/state` и владеет typed RU/EN presentation layer в `frontend/src/i18n`.
 
 API adapter находится в `src/enterprise_ai_tool_gateway/api/http`. Он отвечает за FastAPI routing, request DTOs, response DTOs, error normalization, dependency wiring и mapping между API DTOs и application DTOs. Routes остаются тонкими: они не выполняют инструменты, не оценивают policy, не создают audit decisions и не владеют workflow state.
 
@@ -166,7 +166,7 @@ Approval safety floor означает, что `AUTO_APPROVE` не может о
 
 Когда требуется approval, runtime сохраняет pending approval и state-changing action tool call со статусом `WAITING_FOR_APPROVAL`. Draft action не запускается, и draft output не создаётся до обязательного approval.
 
-Approved decision возобновляет run и выполняет waiting action tool call с explicit authorization. Rejected или cancelled decision помечает waiting tool call как rejected при его наличии, обновляет run до `REJECTED` и записывает audit events. Resolve approval, который уже terminal или не принадлежит run, является state conflict на API layer.
+Approved decision возобновляет run и выполняет waiting action tool call с explicit authorization. Rejected или cancelled decision помечает waiting tool call как rejected при его наличии, обновляет run до `REJECTED` и записывает audit events. Request validation требует непустой `decided_by`. Persistence-level conditional pending-to-terminal update назначает ровно одного terminal owner; concurrent, repeated, stale или non-owned resolve получает controlled `409 state_conflict` до action-tool, run, terminal ToolCall или terminal audit mutations loser-а.
 
 ## 7. Provider boundary
 
@@ -184,7 +184,7 @@ Audit events фиксируют значимые lifecycle steps, такие к�
 
 При создании audit events применяется recursive redaction к payloads до persistence. Public API projection также редактирует/маскирует tool input/output payloads и approval free-text fields, такие как summary, reason, decided_by и decision_comment.
 
-Redaction основан на keys и values. Secret-like keys и значения, содержащие credential markers, заменяются на `[REDACTED]`, а длинные строки обрезаются. Persisted runtime records могут содержать больше внутренних деталей, чем раскрывают public API DTOs, особенно для tool payloads и approval records.
+Redaction основан на keys и values. Secret-like keys и high-confidence marker-shaped values, включая quoted/serialized credential assignments, заменяются на `[REDACTED]`, а длинные строки обрезаются. Обычный explanatory text с colon-bearing prose не считается credential только по форме. Persisted runtime records могут содержать больше внутренних деталей, чем раскрывают public API DTOs, особенно для tool payloads и approval records.
 
 Этот redaction layer является marker-based safety boundary для локального прототипа. Это не полноценный security, privacy, DLP или classification product.
 
@@ -200,7 +200,7 @@ Persisted gateway records:
 * `Approval`: pending или terminal approval state, approver role, summary, reason и decision metadata.
 * `AuditEvent`: run-scoped event type, actor, redacted payload и timestamp.
 
-Repository является persistence facade. Он сохраняет и читает уже выбранные facts и намеренно не владеет workflow transition validation, policy decisions или tool authorization.
+Repository является persistence facade. Он сохраняет и читает уже выбранные facts и намеренно не владеет general workflow transition validation, policy decisions или tool authorization. Узкое исключение — atomic conditional claim pending approval в terminal state: это persistence ownership boundary, предотвращающая двух terminal winners, но не выбирающая business outcome.
 
 ## 10. Граница Frontend/API
 
@@ -208,9 +208,11 @@ Frontend независим от Python backend. `frontend/src/api` отвеча
 
 Frontend не выполняет workflow logic, не вызывает providers, не оценивает policy, не запускает tools, не approves actions locally и не читает SQLite database. Он отображает backend-controlled results, возвращённые API.
 
-Local known-run index хранит run IDs и selected run ID в browser local storage для текущей demo session. Это не backend global run index, global audit search, production approval queue или multi-user history system.
+Local known-run index хранит run IDs и selected run ID в browser local storage для текущей demo session; locale preference хранится отдельно как presentation convenience. Storage failures не превращают backend outcome в application failure: текущий tab сохраняет usable in-memory state, но persistence нескольких ключей не является atomic. Это не backend global run index, global audit search, production approval queue или multi-user history system.
 
-UI — это локальная Gateway Operations Console для отправки demo workflows, просмотра run detail, разрешения run-scoped approvals и инспекции run-scoped tool calls и audit events.
+Aggregate UI reads различают complete, partial и unavailable state, failed refresh сохраняет persistent stale/error evidence, а run/approval data, controls, drafts и async outcomes остаются identity-scoped. UI — это локальная Gateway Operations Console для отправки demo workflows, просмотра run detail, разрешения run-scoped approvals и инспекции run-scoped tool calls и audit events.
+
+RU/EN localization изменяет только presentation. Fresh local/demo session по умолчанию использует RU; переключение locale не remount-ит route state и не изменяет API paths, JSON keys, canonical IDs/enums, raw JSON или backend-provided text.
 
 ## 11. Failure model
 

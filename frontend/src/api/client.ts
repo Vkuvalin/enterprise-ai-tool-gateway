@@ -26,10 +26,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const payload = contentType.includes("application/json") ? await response.json() : null;
 
   if (!response.ok) {
+    const normalizedMessage = extractErrorMessage(payload, response.status);
     throw new ApiError({
       status: response.status,
       code: extractErrorCode(payload),
-      message: extractErrorMessage(payload, response.status),
+      ...normalizedMessage,
       details: payload
     });
   }
@@ -45,15 +46,21 @@ function extractErrorCode(payload: unknown): string {
   return "api_error";
 }
 
-function extractErrorMessage(payload: unknown, status: number): string {
+function extractErrorMessage(
+  payload: unknown,
+  status: number
+): { message: string; frontendMessage?: "api_request_failed" } {
   const detail = getDetail(payload);
   if (isRecord(detail) && typeof detail.message === "string") {
-    return detail.message;
+    return { message: detail.message };
   }
   if (typeof detail === "string") {
-    return detail;
+    return { message: detail };
   }
-  return `API request failed with HTTP ${status}.`;
+  return {
+    message: `API request failed with HTTP ${status}.`,
+    frontendMessage: "api_request_failed"
+  };
 }
 
 function getDetail(payload: unknown): unknown {

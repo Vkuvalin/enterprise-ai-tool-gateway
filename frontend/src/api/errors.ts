@@ -3,6 +3,7 @@ export type NormalizedApiError = {
   code: string;
   message: string;
   details?: unknown;
+  frontendMessage?: "client_error" | "unexpected_client_error" | "api_request_failed";
 };
 
 export class ApiError extends Error {
@@ -21,16 +22,25 @@ export function toDisplayError(error: unknown): NormalizedApiError {
   }
 
   if (error instanceof Error) {
+    if (error.message) {
+      return {
+        status: null,
+        code: "client_error",
+        message: error.message
+      };
+    }
     return {
       status: null,
       code: "client_error",
-      message: error.message || "Client error."
+      message: "Client error.",
+      frontendMessage: "client_error"
     };
   }
 
   return {
     status: null,
     code: "unknown_client_error",
-    message: "Unexpected client error."
+    message: "Unexpected client error.",
+    frontendMessage: "unexpected_client_error"
   };
 }

@@ -52,7 +52,10 @@ from enterprise_ai_tool_gateway.contracts.schemas import (
     LLMDecisionPayload,
     ToolCallRead,
 )
-from enterprise_ai_tool_gateway.db import GatewayRepository
+from enterprise_ai_tool_gateway.db import (
+    ApprovalResolutionConflictError,
+    GatewayRepository,
+)
 from enterprise_ai_tool_gateway.llm import (
     LLMDecisionRequest,
     LLMProviderPort,
@@ -389,7 +392,7 @@ class MaintenanceLiteWorkflowRuntime:
         if run is None:
             raise KeyError(f"AgentRun {request.run_id} does not exist")
         if run.status is not AgentRunStatus.WAITING_FOR_APPROVAL:
-            raise ValueError("Maintenance approval can only be resolved for a waiting run")
+            raise ApprovalResolutionConflictError(request.approval_id)
 
         approval = await self._repo.get_approval(request.approval_id)
         if approval is None:
@@ -397,7 +400,7 @@ class MaintenanceLiteWorkflowRuntime:
         if approval.run_id != run.id:
             raise ValueError("Approval does not belong to the requested run")
         if approval.status is not ApprovalStatus.PENDING:
-            raise ValueError("Approval is not pending")
+            raise ApprovalResolutionConflictError(approval.id)
 
         decision, approval = await apply_approval_decision(
             self._repo,

@@ -113,6 +113,30 @@ def test_malformed_submit_body_returns_422() -> None:
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize(
+    ("currency", "expected_status"),
+    [
+        pytest.param("USD", 200, id="usd"),
+        pytest.param("", 422, id="empty"),
+        pytest.param("EUR", 422, id="non-usd"),
+    ],
+)
+def test_procurement_submit_currency_is_usd_only(
+    currency: str,
+    expected_status: int,
+) -> None:
+    with _client() as client:
+        response = client.post(
+            "/api/v1/procurement-requests",
+            json=_procurement_body(currency=currency),
+        )
+
+    assert response.status_code == expected_status
+    if expected_status == 200:
+        assert response.json()["run"]["status"] == "COMPLETED"
+        assert _draft_created(response.json())
+
+
 @pytest.mark.parametrize("observed_severity", ["low", "unknown"])
 def test_maintenance_submit_rejects_non_canonical_observed_severity(
     observed_severity: str,
@@ -172,7 +196,7 @@ def _access_body(
     }
 
 
-def _procurement_body() -> dict[str, object]:
+def _procurement_body(*, currency: str = "USD") -> dict[str, object]:
     return {
         "user_id": "user-1",
         "request_text": "Need to buy equipment.",
@@ -180,7 +204,7 @@ def _procurement_body() -> dict[str, object]:
         "item_id": "item-laptop",
         "quantity": 1,
         "estimated_total": 900.0,
-        "currency": "USD",
+        "currency": currency,
         "cost_center": "cc-ops",
         "justification": "Need equipment.",
         "preferred_vendor_id": "vendor-approved-001",

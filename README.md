@@ -11,7 +11,7 @@ Enterprise AI Tool Gateway — это локальный/demo-прототип �
 * Controlled gateway lifecycle от workflow submission до final run status.
 * Синтетические enterprise workflows для access, procurement и maintenance.
 * FastAPI backend с версионированными endpoints `/api/v1`.
-* React/Vite frontend как локальная web console поверх API.
+* React/Vite frontend как локальная RU/EN web console поверх API; fresh local session по умолчанию использует русский язык.
 * Deterministic eval suite для backend/API acceptance behavior.
 * Public redaction/projection boundary для run, tool, approval и audit data.
 
@@ -50,13 +50,21 @@ Backend владеет workflow decisions. Frontend отправляет demo re
 
 ## 5. Quickstart
 
-Быстрый demo runner для Windows:
+После clean checkout сначала установите frontend dependencies:
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+Затем используйте быстрый demo runner для Windows:
 
 ```text
 run_demo.cmd
 ```
 
-Runner запускает локальные backend и frontend, открывает dashboard и оставляет одно управляющее PowerShell window открытым. Manual commands ниже остаются доступны, когда нужны отдельные терминалы.
+Runner запускает локальные backend и frontend, положительно проверяет Gateway frontend по project marker и API proxy, открывает dashboard и оставляет одно управляющее PowerShell window открытым. Уже готовые services переиспользуются без передачи ownership; `Q` останавливает только процессы, запущенные этим runner instance. Для explicit cleanup всех проверенных runner-owned instances используйте `scripts/demo/stop_demo.ps1`. Runner не устанавливает npm dependencies автоматически.
 
 Запустить backend из корня repository:
 
@@ -68,7 +76,6 @@ uv run uvicorn enterprise_ai_tool_gateway.api.http.app:app --reload
 
 ```bash
 cd frontend
-npm install
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 

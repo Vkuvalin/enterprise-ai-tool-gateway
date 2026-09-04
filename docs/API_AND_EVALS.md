@@ -74,6 +74,8 @@ Compact access submit shape:
 
 Текущие submit schemas являются workflow-specific. Они не принимают `provider`, `model` или похожие model-selection fields.
 
+Synthetic Procurement contract принимает только canonical currency `USD`; другое значение отклоняется request validation с HTTP 422 до запуска workflow.
+
 ## 5. Approval endpoint
 
 | Method | Path                                      | Назначение                                             |
@@ -99,9 +101,9 @@ Request body:
 | `REJECTED`  | Отклоняет run и не создаёт draft.                                                                              |
 | `CANCELLED` | Отклоняет run и не создаёт draft.                                                                              |
 
-`PENDING` не является decision. Request schema отклоняет его с HTTP 422.
+`PENDING` не является decision. Request schema отклоняет его с HTTP 422. Поле `decided_by` обязательно и не может быть empty или whitespace-only; такое значение также возвращает HTTP 422.
 
-Когда существует required approval, draft action не запускается и draft output не создаётся до approval resolution. Rejected или cancelled approval не создаёт draft. Resolve approval, который уже terminal, возвращает state conflict.
+Когда существует required approval, draft action не запускается и draft output не создаётся до approval resolution. Rejected или cancelled approval не создаёт draft. Repository conditional update атомарно назначает одного owner перехода из `PENDING` в terminal status. Concurrent, repeated, stale или run-mismatched loser получает HTTP `409` с `detail.code == "state_conflict"` до второго action-tool execution, run rewrite, terminal ToolCall rewrite или противоречивого terminal audit event.
 
 Текущая approval policy включает `AUTO_APPROVE` safety floor: `AUTO_APPROVE` не обходит high-risk, critical-risk или default-approval state-changing controls. High-risk/default-approval state-changing actions всё равно требуют approval, а critical-risk actions переводятся в manual review.
 
@@ -139,7 +141,7 @@ HTTP errors зарезервированы для API-level failures:
 
 | HTTP status | Использование                                                                                               |
 | ----------- | ----------------------------------------------------------------------------------------------------------- |
-| `422`       | Malformed или invalid API request body, включая forbidden extra fields или `PENDING` как approval decision. |
+| `422`       | Malformed или invalid API request body, включая forbidden extra fields, non-USD procurement currency, blank `decided_by` или `PENDING` как approval decision. |
 | `404`       | Missing run или approval.                                                                                   |
 | `409`       | State conflict, например mismatched run/approval, non-waiting run или repeated approval resolution.         |
 | `500`       | Unexpected internal API error с generic safe message.                                                       |
@@ -151,9 +153,9 @@ Public API responses используют safe projection поверх internal 
 * tool input и output payloads проходят public redaction перед API responses;
 * approval free-text fields, такие как `summary`, `reason`, `decided_by` и `decision_comment`, проходят redaction перед API responses;
 * audit event payloads создаются с recursive redaction до persistence и затем раскрываются как run-scoped audit payloads;
-* redaction покрывает sensitive keys и high-confidence sensitive-looking values, включая markers для token, password, secret, API key и authorization;
+* redaction покрывает sensitive keys и high-confidence sensitive-looking values, включая markers для token, password, secret, API key, authorization и quoted/serialized credential assignments;
 * persisted records могут содержать internal details, которые public DTOs напрямую не раскрывают;
-* redaction основан на markers и value patterns. Это не полноценный security, privacy, DLP или classification product.
+* redaction основан на bounded markers и value patterns; benign explanatory colon-bearing prose само по себе не считается secret. Это не полноценный security, privacy, DLP или classification product.
 
 ## 9. Назначение eval runner
 

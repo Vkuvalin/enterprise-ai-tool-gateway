@@ -1,57 +1,60 @@
 import { Link, useLocation } from "react-router-dom";
+import { useLocale } from "../../i18n/LocaleProvider";
+import type { MessageKey } from "../../i18n/messages";
 import { useKnownRuns } from "../../state/knownRuns";
 
 type SidebarSection = "dashboard" | "workflows" | "runs" | "approvals" | "tool-calls" | "audit" | "settings";
 
 type SidebarItem = {
-  label: string;
+  labelKey: MessageKey;
   to: string;
   section: SidebarSection;
-  disabledLabel?: string;
+  disabledLabelKey?: MessageKey;
 };
 
 const baseItems: SidebarItem[] = [
-  { label: "Dashboard", to: "/dashboard", section: "dashboard" },
-  { label: "Workflows", to: "/workflows", section: "workflows" },
-  { label: "Agent Runs", to: "/runs", section: "runs" },
-  { label: "Approvals", to: "/approvals", section: "approvals" },
-  { label: "Settings", to: "/settings", section: "settings" }
+  { labelKey: "nav.dashboard", to: "/dashboard", section: "dashboard" },
+  { labelKey: "nav.workflows", to: "/workflows", section: "workflows" },
+  { labelKey: "nav.runs", to: "/runs", section: "runs" },
+  { labelKey: "nav.approvals", to: "/approvals", section: "approvals" },
+  { labelKey: "nav.settings", to: "/settings", section: "settings" }
 ];
 
 export function SidebarNav() {
+  const { t } = useLocale();
   const { pathname } = useLocation();
   const { selectedRunId, knownRunIds } = useKnownRuns();
   const activeSection = getActiveSection(pathname);
   const currentRunId = getRunIdFromPath(pathname) ?? selectedRunId;
   const runScopedItems: SidebarItem[] = currentRunId
     ? [
-        { label: "Tool Calls", to: `/runs/${encodeURIComponent(currentRunId)}/tool-calls`, section: "tool-calls" },
-        { label: "Audit Trail", to: `/runs/${encodeURIComponent(currentRunId)}/audit`, section: "audit" }
+        { labelKey: "nav.toolCalls", to: `/runs/${encodeURIComponent(currentRunId)}/tool-calls`, section: "tool-calls" },
+        { labelKey: "nav.auditTrail", to: `/runs/${encodeURIComponent(currentRunId)}/audit`, section: "audit" }
       ]
     : [
-        { label: "Tool Calls", to: "/dashboard", section: "tool-calls", disabledLabel: "Select a run" },
-        { label: "Audit Trail", to: "/dashboard", section: "audit", disabledLabel: "Select a run" }
+        { labelKey: "nav.toolCalls", to: "/dashboard", section: "tool-calls", disabledLabelKey: "nav.selectRun" },
+        { labelKey: "nav.auditTrail", to: "/dashboard", section: "audit", disabledLabelKey: "nav.selectRun" }
       ];
 
   return (
     <aside className="sidebar">
-      <nav className="sidebar__nav" aria-label="Primary navigation">
+      <nav className="sidebar__nav" aria-label={t("nav.primary")}>
         {[...baseItems.slice(0, 4), ...runScopedItems, ...baseItems.slice(4)].map((item) => (
           <Link
-            key={`${item.label}-${item.to}`}
+            key={`${item.section}-${item.to}`}
             className={`sidebar__link ${
-              activeSection === item.section && !item.disabledLabel ? "sidebar__link--active" : ""
+              activeSection === item.section && !item.disabledLabelKey ? "sidebar__link--active" : ""
             }`.trim()}
             to={item.to}
-            title={item.disabledLabel ?? item.label}
+            title={item.disabledLabelKey ? t(item.disabledLabelKey) : t(item.labelKey)}
           >
-            <span>{item.label}</span>
-            {item.disabledLabel ? <small>{item.disabledLabel}</small> : null}
+            <span>{t(item.labelKey)}</span>
+            {item.disabledLabelKey ? <small>{t(item.disabledLabelKey)}</small> : null}
           </Link>
         ))}
       </nav>
       <div className="sidebar__footer">
-        <span>Known runs</span>
+        <span>{t("nav.knownRuns")}</span>
         <strong>{knownRunIds.length}</strong>
       </div>
     </aside>

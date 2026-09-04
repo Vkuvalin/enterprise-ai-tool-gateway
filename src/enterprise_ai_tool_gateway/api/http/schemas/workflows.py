@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 
 from enterprise_ai_tool_gateway.access.schemas import AccessLevel
@@ -35,7 +37,7 @@ class ProcurementSubmitRequest(ApiModel):
     item_name: str | None = None
     quantity: int | None = Field(default=None, gt=0)
     estimated_total: float | None = Field(default=None, ge=0)
-    currency: str = "USD"
+    currency: Literal["USD"] = "USD"
     cost_center: str | None = None
     justification: str | None = None
     preferred_vendor_id: str | None = None

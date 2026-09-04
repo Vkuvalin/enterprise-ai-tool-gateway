@@ -8,11 +8,14 @@ import { useApiStatus } from "../features/capabilities/useApiStatus";
 import { WorkflowResultPanel } from "../features/workflows/WorkflowResultPanel";
 import { WorkflowSafetyPanel } from "../features/workflows/WorkflowSafetyPanel";
 import { getWorkflowByKey } from "../features/workflows/registry";
+import { useLocale } from "../i18n/LocaleProvider";
+import { getApprovalModeLabel, getSeverityLabel } from "../i18n/presentation";
 import { addKnownRunId } from "../state/knownRuns";
 
 const workflow = getWorkflowByKey("maintenance");
 
 export function MaintenanceRequestPage() {
+  const { t } = useLocale();
   const { capabilities } = useApiStatus();
   const approvalModes = capabilities?.approval_modes ?? ["HIGH_RISK_ONLY"];
   const [form, setForm] = useState<MaintenanceSubmitRequest>({
@@ -49,18 +52,18 @@ export function MaintenanceRequestPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Maintenance Request"
-        eyebrow="Workflow submit"
-        description={`${workflow.description} Defaults use an active requester, active asset, low severity, and no safety concern for a successful demo path.`}
+        title={t(workflow.titleKey)}
+        eyebrow={t("workflows.form.eyebrow")}
+        description={`${t(workflow.descriptionKey)} ${t("workflows.maintenance.defaultPathHelp")}`}
       />
       <div className="content-with-inspector">
         <form className="form-panel" onSubmit={(event) => void onSubmit(event)}>
           <label>
-            User ID
+            {t("workflows.form.userId")}
             <input value={form.user_id} onChange={(event) => setForm({ ...form, user_id: event.target.value })} />
           </label>
           <label>
-            Request text
+            {t("workflows.form.requestText")}
             <textarea
               value={form.request_text}
               onChange={(event) => setForm({ ...form, request_text: event.target.value })}
@@ -69,35 +72,35 @@ export function MaintenanceRequestPage() {
           </label>
           <div className="form-grid">
             <label>
-              Requester ID
+              {t("workflows.maintenance.requesterId")}
               <input
                 value={form.requester_id ?? ""}
                 onChange={(event) => setForm({ ...form, requester_id: event.target.value || null })}
               />
             </label>
             <label>
-              Asset ID
+              {t("workflows.maintenance.assetId")}
               <input
                 value={form.asset_id ?? ""}
                 onChange={(event) => setForm({ ...form, asset_id: event.target.value || null })}
               />
             </label>
             <label>
-              Asset name
+              {t("workflows.maintenance.assetName")}
               <input
                 value={form.asset_name ?? ""}
                 onChange={(event) => setForm({ ...form, asset_name: event.target.value || null })}
               />
             </label>
             <label>
-              Location
+              {t("workflows.maintenance.location")}
               <input
                 value={form.location ?? ""}
                 onChange={(event) => setForm({ ...form, location: event.target.value || null })}
               />
             </label>
             <label>
-              Observed severity
+              {t("workflows.maintenance.observedSeverity")}
               <select
                 value={form.observed_severity ?? ""}
                 onChange={(event) =>
@@ -109,28 +112,28 @@ export function MaintenanceRequestPage() {
                   })
                 }
               >
-                <option value="LOW">LOW</option>
-                <option value="MEDIUM">MEDIUM</option>
-                <option value="HIGH">HIGH</option>
-                <option value="CRITICAL">CRITICAL</option>
+                <option value="LOW">{getSeverityLabel("LOW", t)}</option>
+                <option value="MEDIUM">{getSeverityLabel("MEDIUM", t)}</option>
+                <option value="HIGH">{getSeverityLabel("HIGH", t)}</option>
+                <option value="CRITICAL">{getSeverityLabel("CRITICAL", t)}</option>
               </select>
             </label>
             <label>
-              Approval mode
+              {t("workflows.form.approvalMode")}
               <select
                 value={form.approval_mode}
                 onChange={(event) => setForm({ ...form, approval_mode: event.target.value })}
               >
                 {approvalModes.map((mode) => (
                   <option key={mode} value={mode}>
-                    {mode}
+                    {getApprovalModeLabel(mode, t)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
           <label>
-            Issue description
+            {t("workflows.maintenance.issueDescription")}
             <textarea
               value={form.issue_description ?? ""}
               onChange={(event) => setForm({ ...form, issue_description: event.target.value || null })}
@@ -143,11 +146,11 @@ export function MaintenanceRequestPage() {
               checked={Boolean(form.safety_concern)}
               onChange={(event) => setForm({ ...form, safety_concern: event.target.checked })}
             />
-            Safety concern
+            {t("workflows.maintenance.safetyConcern")}
           </label>
           {error ? <ErrorState error={error} /> : null}
           <ActionButton type="submit" variant="primary" disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit maintenance request"}
+            {submitting ? t("workflows.form.submitting") : t("workflows.maintenance.submit")}
           </ActionButton>
         </form>
         <div className="stack">

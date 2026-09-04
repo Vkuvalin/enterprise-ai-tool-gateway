@@ -32,7 +32,7 @@ from enterprise_ai_tool_gateway.contracts.enums import (
     DomainTemplate,
     RequestType,
 )
-from enterprise_ai_tool_gateway.db import GatewayRepository
+from enterprise_ai_tool_gateway.db import ApprovalResolutionConflictError, GatewayRepository
 
 router = APIRouter(tags=["approvals"])
 
@@ -60,25 +60,31 @@ async def resolve_approval(
     if run.status is not AgentRunStatus.WAITING_FOR_APPROVAL:
         raise conflict("Run is not waiting for approval.")
 
-    if run.request_type is RequestType.ACCESS_REQUEST and run.domain_template is DomainTemplate.ACCESS:
-        result = await access_runtime.resolve_access_approval(
-            to_access_approval_request(approval_id, request)
-        )
-    elif (
-        run.request_type is RequestType.PROCUREMENT_REQUEST
-        and run.domain_template is DomainTemplate.PROCUREMENT
-    ):
-        result = await procurement_runtime.resolve_procurement_approval(
-            to_procurement_approval_request(approval_id, request)
-        )
-    elif (
-        run.request_type is RequestType.MAINTENANCE_REQUEST
-        and run.domain_template is DomainTemplate.MAINTENANCE_LITE
-    ):
-        result = await maintenance_runtime.resolve_maintenance_approval(
-            to_maintenance_approval_request(approval_id, request)
-        )
-    else:
-        raise conflict("Approval dispatch is unsupported for this run.")
+    try:
+        if (
+            run.request_type is RequestType.ACCESS_REQUEST
+            and run.domain_template is DomainTemplate.ACCESS
+        ):
+            result = await access_runtime.resolve_access_approval(
+                to_access_approval_request(approval_id, request)
+            )
+        elif (
+            run.request_type is RequestType.PROCUREMENT_REQUEST
+            and run.domain_template is DomainTemplate.PROCUREMENT
+        ):
+            result = await procurement_runtime.resolve_procurement_approval(
+                to_procurement_approval_request(approval_id, request)
+            )
+        elif (
+            run.request_type is RequestType.MAINTENANCE_REQUEST
+            and run.domain_template is DomainTemplate.MAINTENANCE_LITE
+        ):
+            result = await maintenance_runtime.resolve_maintenance_approval(
+                to_maintenance_approval_request(approval_id, request)
+            )
+        else:
+            raise conflict("Approval dispatch is unsupported for this run.")
+    except ApprovalResolutionConflictError:
+        raise conflict("Approval is already resolved.") from None
 
     return workflow_result_to_response(result)

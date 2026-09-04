@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from enterprise_ai_tool_gateway.api import create_app
@@ -182,6 +183,28 @@ def test_approval_edge_cases_return_expected_http_errors() -> None:
     assert resolved.status_code == 200
     assert resolved.json()["run"]["status"] == "REJECTED"
     assert second_resolve.status_code == 409
+
+
+@pytest.mark.parametrize("decided_by", ["", "   "])
+def test_blank_decided_by_is_rejected_without_workflow_mutation(decided_by: str) -> None:
+    with _client() as client:
+        submitted = client.post("/api/v1/access-requests", json=_admin_access_body())
+        assert submitted.status_code == 200
+        submitted_body = submitted.json()
+        approval_id = submitted_body["approval"]["id"]
+        run_id = submitted_body["run"]["id"]
+        before = client.get(f"/api/v1/runs/{run_id}")
+        assert before.status_code == 200
+
+        resolved = client.post(
+            f"/api/v1/approvals/{approval_id}/resolve",
+            json={**_resolve_body(run_id, "APPROVED"), "decided_by": decided_by},
+        )
+        after = client.get(f"/api/v1/runs/{run_id}")
+
+    assert resolved.status_code == 422
+    assert after.status_code == 200
+    assert after.json() == before.json()
 
 
 def test_unknown_run_read_endpoints_return_404() -> None:

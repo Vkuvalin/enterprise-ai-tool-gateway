@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$NoBrowser
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -9,17 +11,22 @@ $FrontendHost = "127.0.0.1"
 $FrontendPort = 5173
 $BackendHealthUrl = "http://127.0.0.1:8000/api/v1/health"
 $FrontendUrl = "http://127.0.0.1:5173/"
+$FrontendMarkerUrl = "http://127.0.0.1:5173/gateway-demo-marker.txt"
+$FrontendProxyHealthUrl = "http://127.0.0.1:5173/api/v1/health"
+$FrontendMarkerContent = "enterprise-ai-tool-gateway:frontend:v1"
 $DashboardUrl = "http://127.0.0.1:5173/dashboard"
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $RepoRoot
 
+. (Join-Path $PSScriptRoot "runner_common.ps1")
+
 $RuntimeDir = Join-Path $RepoRoot ".runtime"
-$LogDir = Join-Path $RuntimeDir "logs"
-$BackendLog = Join-Path $LogDir "backend.log"
-$FrontendLog = Join-Path $LogDir "frontend.log"
-$BackendPidFile = Join-Path $RuntimeDir "demo-backend.pid"
-$FrontendPidFile = Join-Path $RuntimeDir "demo-frontend.pid"
+$InstancesDir = Join-Path $RuntimeDir "instances"
+$InstanceId = [guid]::NewGuid().ToString("N")
+$InstanceDir = Join-Path $InstancesDir $InstanceId
+$LogDir = Join-Path $RuntimeDir "logs\$InstanceId"
+$InstanceMetadataPath = Join-Path $InstanceDir "instance.json"
 $StartedProcesses = @()
 
 function Write-Info {
@@ -73,7 +80,7 @@ function Resolve-NpmPath {
     }
 
     $fallback = "C:\Program Files\nodejs\npm.cmd"
-    if (Test-Path $fallback) {
+    if (Test-Path -LiteralPath $fallback) {
         return $fallback
     }
 
@@ -107,7 +114,7 @@ function Test-TcpPort {
 function Test-BackendHealthy {
     try {
         $response = Invoke-WebRequest -Uri $BackendHealthUrl -UseBasicParsing -TimeoutSec 2
-        if ($response.StatusCode -lt 200 -or $response.StatusCode -ge 300) {
+        if ($response.StatusCode -ne 200) {
             return $false
         }
         $body = $response.Content | ConvertFrom-Json
@@ -118,14 +125,49 @@ function Test-BackendHealthy {
     }
 }
 
-function Test-FrontendReachable {
+function Get-FrontendIdentityState {
+    if (-not (Test-TcpPort -HostName $FrontendHost -Port $FrontendPort -TimeoutMs 500)) {
+        return "Unreachable"
+    }
+
     try {
-        $response = Invoke-WebRequest -Uri $FrontendUrl -UseBasicParsing -TimeoutSec 2
-        return $response.StatusCode -ge 200 -and $response.StatusCode -lt 400
+        $markerResponse = Invoke-WebRequest `
+            -Uri $FrontendMarkerUrl `
+            -UseBasicParsing `
+            -MaximumRedirection 0 `
+            -TimeoutSec 2
+        if ($markerResponse.StatusCode -ne 200) {
+            return "WrongIdentity"
+        }
+
+        $markerBody = ([string]$markerResponse.Content).TrimEnd([char[]]@("`r", "`n"))
+        if (-not [string]::Equals($markerBody, $FrontendMarkerContent, [System.StringComparison]::Ordinal)) {
+            return "WrongIdentity"
+        }
     }
     catch {
-        return $false
+        return "WrongIdentity"
     }
+
+    try {
+        $healthResponse = Invoke-WebRequest `
+            -Uri $FrontendProxyHealthUrl `
+            -UseBasicParsing `
+            -MaximumRedirection 0 `
+            -TimeoutSec 2
+        if ($healthResponse.StatusCode -ne 200) {
+            return "ProxyUnhealthy"
+        }
+        $health = $healthResponse.Content | ConvertFrom-Json
+        if ($health.status -ne "ok") {
+            return "ProxyUnhealthy"
+        }
+    }
+    catch {
+        return "ProxyUnhealthy"
+    }
+
+    return "Ready"
 }
 
 function Start-LoggedCommand {
@@ -137,14 +179,15 @@ function Start-LoggedCommand {
         [string]$LogPath
     )
 
-    if (Test-Path $LogPath) {
-        Clear-Content -Path $LogPath
-    }
-    else {
-        New-Item -ItemType File -Path $LogPath -Force | Out-Null
-    }
+    New-Item -ItemType File -Path $LogPath -Force | Out-Null
 
-    $commandLine = "$(Quote-CmdArgument $Executable) $(Join-CmdArguments $Arguments) 1>>$(Quote-CmdArgument $LogPath) 2>>&1"
+    $commandLine = (
+        'set "GATEWAY_DEMO_INSTANCE={0}" && {1} {2} 1>>{3} 2>>&1' -f
+        $InstanceId,
+        (Quote-CmdArgument $Executable),
+        (Join-CmdArguments $Arguments),
+        (Quote-CmdArgument $LogPath)
+    )
     $processInfo = New-Object System.Diagnostics.ProcessStartInfo
     $processInfo.FileName = $env:ComSpec
     $processInfo.Arguments = "/d /s /c ""$commandLine"""
@@ -160,156 +203,142 @@ function Start-LoggedCommand {
     return $process
 }
 
+function New-OwnedProcessRecord {
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet("backend", "frontend")][string]$Service,
+        [Parameter(Mandatory = $true)][System.Diagnostics.Process]$Process,
+        [Parameter(Mandatory = $true)][string]$LogPath
+    )
+
+    try {
+        $startTicks = [long]$Process.StartTime.ToUniversalTime().Ticks
+    }
+    catch {
+        throw "Could not capture start identity for $Service process $($Process.Id)."
+    }
+
+    return [pscustomobject][ordered]@{
+        schema_version = 1
+        instance_id = $InstanceId
+        service = $Service
+        process_id = [int]$Process.Id
+        process_start_utc_ticks = [string]$startTicks
+        repo_root = Get-DemoCanonicalPath -Path $RepoRoot
+        log_path = Get-DemoCanonicalPath -Path $LogPath
+        created_utc = [DateTime]::UtcNow.ToString("o")
+    }
+}
+
+function Publish-OwnedProcessRecord {
+    param([Parameter(Mandatory = $true)]$Record)
+
+    $metadataPath = Join-Path $InstanceDir "$($Record.service).json"
+    $script:StartedProcesses += [pscustomobject]@{
+        Record = $Record
+        MetadataPath = $metadataPath
+    }
+    Write-DemoJsonAtomically -Path $metadataPath -Value $Record
+}
+
+function Test-OwnedProcessActive {
+    param([Parameter(Mandatory = $true)]$Entry)
+
+    $record = $Entry.Record
+    $state = Get-DemoProcessState `
+        -ProcessId ([int]$record.process_id) `
+        -ExpectedStartUtcTicks ([long]$record.process_start_utc_ticks)
+    if ($state.State -ne "Match") {
+        return $false
+    }
+
+    $command = Get-DemoProcessCommandLine -ProcessId ([int]$record.process_id)
+    if (-not $command.Success) {
+        return $false
+    }
+    $markers = @(
+        Get-DemoExpectedCommandMarkers `
+            -RepoRoot $RepoRoot `
+            -InstanceId $InstanceId `
+            -Service ([string]$record.service)
+    )
+    return Test-DemoCommandLineMarkers -CommandLine $command.Value -Markers $markers
+}
+
 function Wait-ForReady {
     param(
         [string]$Name,
         [scriptblock]$Probe,
         [int]$TimeoutSeconds,
-        [System.Diagnostics.Process]$Process,
+        $OwnedEntry,
         [string]$LogPath
     )
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
-        if (& $Probe) {
-            return
+        if ($OwnedEntry -and -not (Test-OwnedProcessActive -Entry $OwnedEntry)) {
+            throw "$Name exited or lost its runner identity before becoming ready. See log: $LogPath"
         }
 
-        if ($Process -and $Process.HasExited) {
-            throw "$Name exited before becoming reachable. See log: $LogPath"
+        if (& $Probe) {
+            if ($OwnedEntry -and -not (Test-OwnedProcessActive -Entry $OwnedEntry)) {
+                throw "$Name readiness was satisfied by a different process. See log: $LogPath"
+            }
+            return
         }
 
         Start-Sleep -Seconds 1
     }
 
-    throw "$Name did not become reachable within $TimeoutSeconds seconds. See log: $LogPath"
-}
-
-function Get-ProcessCommandLine {
-    param([int]$ProcessId)
-
-    try {
-        $process = Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction Stop
-        return $process.CommandLine
-    }
-    catch {
-        try {
-            $process = Get-WmiObject Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction Stop
-            return $process.CommandLine
-        }
-        catch {
-            return $null
-        }
-    }
-}
-
-function Get-ChildProcessIds {
-    param([int]$ParentProcessId)
-
-    $children = @()
-    try {
-        $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentProcessId" -ErrorAction Stop)
-    }
-    catch {
-        try {
-            $children = @(Get-WmiObject Win32_Process -Filter "ParentProcessId=$ParentProcessId" -ErrorAction Stop)
-        }
-        catch {
-            $children = @()
-        }
-    }
-
-    $ids = @()
-    foreach ($child in $children) {
-        $childId = [int]$child.ProcessId
-        $ids += $childId
-        $ids += Get-ChildProcessIds -ParentProcessId $childId
-    }
-    return $ids
-}
-
-function Test-CommandLineMarkers {
-    param(
-        [int]$ProcessId,
-        [string[]]$Markers
-    )
-
-    $commandLine = Get-ProcessCommandLine -ProcessId $ProcessId
-    if ([string]::IsNullOrWhiteSpace($commandLine)) {
-        return $false
-    }
-
-    foreach ($marker in $Markers) {
-        if ($commandLine -notlike "*$marker*") {
-            return $false
-        }
-    }
-
-    return $true
-}
-
-function Stop-RecordedProcess {
-    param(
-        [string]$Name,
-        [string]$PidFile,
-        [string[]]$Markers
-    )
-
-    if (-not (Test-Path $PidFile)) {
-        return
-    }
-
-    $rawPid = (Get-Content -Path $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
-    $processId = 0
-    if (-not [int]::TryParse($rawPid, [ref]$processId)) {
-        Write-WarningLine "Ignoring invalid $Name PID file: $PidFile"
-        Remove-Item -Path $PidFile -Force -ErrorAction SilentlyContinue
-        return
-    }
-
-    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-    if (-not $process) {
-        Write-Info "$Name process $processId is not running."
-        Remove-Item -Path $PidFile -Force -ErrorAction SilentlyContinue
-        return
-    }
-
-    if (-not (Test-CommandLineMarkers -ProcessId $processId -Markers $Markers)) {
-        Write-WarningLine "PID $processId does not match the expected $Name command; leaving it running."
-        Remove-Item -Path $PidFile -Force -ErrorAction SilentlyContinue
-        return
-    }
-
-    $processIds = @(Get-ChildProcessIds -ParentProcessId $processId)
-    [array]::Reverse($processIds)
-    $processIds += $processId
-    $uniqueProcessIds = @($processIds | Select-Object -Unique)
-
-    foreach ($id in $uniqueProcessIds) {
-        $target = Get-Process -Id $id -ErrorAction SilentlyContinue
-        if ($target) {
-            Write-Info "Stopping $Name-owned process $id."
-            Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    Remove-Item -Path $PidFile -Force -ErrorAction SilentlyContinue
+    throw "$Name did not become ready within $TimeoutSeconds seconds. See log: $LogPath"
 }
 
 function Stop-StartedProcesses {
     if ($StartedProcesses.Count -eq 0) {
         Write-Info "No runner-owned processes were started by this window."
+        Remove-DemoInstanceMetadataIfEmpty `
+            -InstanceDirectory $InstanceDir `
+            -InstanceId $InstanceId `
+            -MessagePrefix "demo"
         return
     }
 
-    foreach ($entry in @($StartedProcesses)) {
-        Stop-RecordedProcess -Name $entry.Name -PidFile $entry.PidFile -Markers $entry.Markers
+    $entries = @($StartedProcesses)
+    [array]::Reverse($entries)
+    foreach ($entry in $entries) {
+        $result = Stop-DemoOwnedProcess `
+            -OwnershipRecord $entry.Record `
+            -RepoRoot $RepoRoot `
+            -MessagePrefix "demo"
+        if ($result.CanRemoveMetadata) {
+            [void](Remove-DemoOwnershipRecordIfMatching `
+                -MetadataPath $entry.MetadataPath `
+                -OwnershipRecord $entry.Record `
+                -RepoRoot $RepoRoot `
+                -MessagePrefix "demo")
+        }
     }
+
+    Remove-DemoInstanceMetadataIfEmpty `
+        -InstanceDirectory $InstanceDir `
+        -InstanceId $InstanceId `
+        -MessagePrefix "demo"
 }
 
 try {
     Write-Info "Repository root: $RepoRoot"
+    Write-Info "Runner instance: $InstanceId"
+    New-Item -ItemType Directory -Path $InstancesDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $InstanceDir -ErrorAction Stop | Out-Null
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+
+    $instanceRecord = [pscustomobject][ordered]@{
+        schema_version = 1
+        instance_id = $InstanceId
+        runner_process_id = [int]$PID
+        repo_root = Get-DemoCanonicalPath -Path $RepoRoot
+        created_utc = [DateTime]::UtcNow.ToString("o")
+    }
+    Write-DemoJsonAtomically -Path $InstanceMetadataPath -Value $instanceRecord
 
     $uvPath = Resolve-ToolPath -Name "uv"
     $npmPath = Resolve-NpmPath
@@ -317,10 +346,11 @@ try {
     foreach ($relativePath in @(
         "pyproject.toml",
         "frontend/package.json",
+        "frontend/public/gateway-demo-marker.txt",
         "src/enterprise_ai_tool_gateway/api/http/app.py"
     )) {
         $path = Join-Path $RepoRoot $relativePath
-        if (-not (Test-Path $path)) {
+        if (-not (Test-Path -LiteralPath $path)) {
             throw "Expected file is missing: $relativePath"
         }
     }
@@ -335,73 +365,105 @@ try {
         throw "Port $BackendPort is occupied, but $BackendHealthUrl did not return status ok. Stop the conflicting process and run the demo again."
     }
     else {
+        $backendLog = Get-DemoExpectedLogPath -RepoRoot $RepoRoot -InstanceId $InstanceId -Service "backend"
         Write-Info "Starting backend on $BackendHost`:$BackendPort."
         $backendProcess = Start-LoggedCommand `
             -Name "backend" `
             -Executable $uvPath `
             -Arguments @("run", "uvicorn", "enterprise_ai_tool_gateway.api.http.app:app", "--host", $BackendHost, "--port", "$BackendPort") `
             -WorkingDirectory $RepoRoot `
-            -LogPath $BackendLog
-        Set-Content -Path $BackendPidFile -Value $backendProcess.Id -Encoding ASCII
-        $StartedProcesses += [pscustomobject]@{
-            Name = "backend"
-            PidFile = $BackendPidFile
-            Markers = @("enterprise_ai_tool_gateway.api.http.app:app", "--port $BackendPort")
-        }
+            -LogPath $backendLog
+        $backendRecord = New-OwnedProcessRecord -Service "backend" -Process $backendProcess -LogPath $backendLog
+        Publish-OwnedProcessRecord -Record $backendRecord
+        $backendEntry = $StartedProcesses[$StartedProcesses.Count - 1]
         $backendStarted = $true
-        Wait-ForReady -Name "Backend" -Probe { Test-BackendHealthy } -TimeoutSeconds 60 -Process $backendProcess -LogPath $BackendLog
+        Wait-ForReady `
+            -Name "Backend" `
+            -Probe { Test-BackendHealthy } `
+            -TimeoutSeconds 60 `
+            -OwnedEntry $backendEntry `
+            -LogPath $backendLog
     }
 
-    if (Test-FrontendReachable) {
-        Write-Info "Frontend is already reachable; reusing $FrontendUrl."
+    $frontendState = Get-FrontendIdentityState
+    if ($frontendState -eq "Ready") {
+        Write-Info "Verified Gateway frontend is already ready; reusing $FrontendUrl."
     }
     elseif (Test-TcpPort -HostName $FrontendHost -Port $FrontendPort) {
-        throw "Port $FrontendPort is occupied, but $FrontendUrl is not reachable. Stop the conflicting process and run the demo again."
+        if ($frontendState -eq "ProxyUnhealthy") {
+            throw "Port $FrontendPort serves the Gateway marker, but its /api/v1 health proxy is not ready. Resolve the conflicting or incomplete frontend and run the demo again."
+        }
+        throw "Port $FrontendPort is occupied by a service that is not the Gateway frontend. Stop the conflicting process and run the demo again."
     }
     else {
+        $vitePackagePath = Join-Path $RepoRoot "frontend\node_modules\vite\package.json"
+        if (-not (Test-Path -LiteralPath $vitePackagePath)) {
+            throw "Frontend dependencies are missing. Run 'cd frontend' and 'npm install' once, then run the demo again."
+        }
+
+        $frontendLog = Get-DemoExpectedLogPath -RepoRoot $RepoRoot -InstanceId $InstanceId -Service "frontend"
         Write-Info "Starting frontend on $FrontendHost`:$FrontendPort."
         $frontendProcess = Start-LoggedCommand `
             -Name "frontend" `
             -Executable $npmPath `
-            -Arguments @("run", "dev", "--", "--host", $FrontendHost, "--port", "$FrontendPort") `
+            -Arguments @("run", "dev", "--", "--host", $FrontendHost, "--port", "$FrontendPort", "--strictPort") `
             -WorkingDirectory (Join-Path $RepoRoot "frontend") `
-            -LogPath $FrontendLog
-        Set-Content -Path $FrontendPidFile -Value $frontendProcess.Id -Encoding ASCII
-        $StartedProcesses += [pscustomobject]@{
-            Name = "frontend"
-            PidFile = $FrontendPidFile
-            Markers = @("run dev", "--port $FrontendPort")
-        }
+            -LogPath $frontendLog
+        $frontendRecord = New-OwnedProcessRecord -Service "frontend" -Process $frontendProcess -LogPath $frontendLog
+        Publish-OwnedProcessRecord -Record $frontendRecord
+        $frontendEntry = $StartedProcesses[$StartedProcesses.Count - 1]
         $frontendStarted = $true
-        Wait-ForReady -Name "Frontend" -Probe { Test-FrontendReachable } -TimeoutSeconds 90 -Process $frontendProcess -LogPath $FrontendLog
+        Wait-ForReady `
+            -Name "Frontend" `
+            -Probe { (Get-FrontendIdentityState) -eq "Ready" } `
+            -TimeoutSeconds 90 `
+            -OwnedEntry $frontendEntry `
+            -LogPath $frontendLog
     }
 
-    Write-Info "Opening dashboard: $DashboardUrl"
-    try {
-        Start-Process $DashboardUrl
+    if ($NoBrowser) {
+        Write-Info "Browser launch skipped by -NoBrowser."
     }
-    catch {
-        Write-WarningLine "Could not open the browser automatically. Open $DashboardUrl manually."
+    else {
+        Write-Info "Opening dashboard: $DashboardUrl"
+        try {
+            Start-Process $DashboardUrl
+        }
+        catch {
+            Write-WarningLine "Could not open the browser automatically. Open $DashboardUrl manually."
+        }
     }
 
     Write-Host ""
     Write-Host "Dashboard URL : $DashboardUrl"
     Write-Host "API health URL: $BackendHealthUrl"
-    Write-Host "Backend log   : $BackendLog"
-    Write-Host "Frontend log  : $FrontendLog"
+    Write-Host "Instance ID   : $InstanceId"
+    Write-Host "Instance data : $InstanceDir"
+    Write-Host "Instance logs : $LogDir"
     Write-Host ""
 
     if ($backendStarted -or $frontendStarted) {
-        Write-Host "Press Q to stop processes started by this runner and exit."
+        $exitMessage = "stop processes started by this runner instance and exit"
     }
     else {
-        Write-Host "Press Q to exit. No existing service will be stopped."
+        $exitMessage = "exit; reused services will not be stopped"
     }
 
-    while ($true) {
-        $key = [Console]::ReadKey($true)
-        if ($key.Key -eq [ConsoleKey]::Q) {
-            break
+    if ($NoBrowser) {
+        while ($true) {
+            $answer = Read-Host "Enter Q to $exitMessage"
+            if ([string]::Equals($answer.Trim(), "q", [System.StringComparison]::OrdinalIgnoreCase)) {
+                break
+            }
+        }
+    }
+    else {
+        Write-Host "Press Q to $exitMessage."
+        while ($true) {
+            $key = [Console]::ReadKey($true)
+            if ($key.Key -eq [ConsoleKey]::Q) {
+                break
+            }
         }
     }
 
@@ -414,7 +476,7 @@ catch {
     Write-Host "Demo runner failed: $($_.Exception.Message)" -ForegroundColor Red
     if ($StartedProcesses.Count -gt 0) {
         Write-Info "Cleaning up processes started during this failed launch."
-        Stop-StartedProcesses
     }
+    Stop-StartedProcesses
     exit 1
 }

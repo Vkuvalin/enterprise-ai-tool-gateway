@@ -23,12 +23,14 @@ def test_tool_call_response_redacts_public_payload_keys_and_values() -> None:
             "duration_days": 30,
             "api_key": "secret-value",
             "message": "Authorization: Bearer abc123456",
+            "metadata": '{"api_key":"embedded-secret"}',
             "approved": True,
         },
         output_payload={
             "status": "draft",
             "summary": "Bearer sk-output-token-123456789",
             "client_secret": "secret-value",
+            "details": '{"authorization":"Bearer short-token"}',
             "reason_codes": ["SYNTHETIC_DRAFT_CREATED"],
         },
         requires_approval=False,
@@ -44,12 +46,14 @@ def test_tool_call_response_redacts_public_payload_keys_and_values() -> None:
         "duration_days": 30,
         "api_key": REDACTED_VALUE,
         "message": REDACTED_VALUE,
+        "metadata": REDACTED_VALUE,
         "approved": True,
     }
     assert response.output_payload == {
         "status": "draft",
         "summary": REDACTED_VALUE,
         "client_secret": REDACTED_VALUE,
+        "details": REDACTED_VALUE,
         "reason_codes": ["SYNTHETIC_DRAFT_CREATED"],
     }
 

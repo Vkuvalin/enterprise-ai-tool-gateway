@@ -6,6 +6,14 @@
 
 ## 1. Routine Validation
 
+После clean checkout один раз подготовьте frontend dependencies; demo runner не выполняет hidden install:
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
 Запускайте default validation перед передачей code changes:
 
 ```bash
@@ -16,7 +24,6 @@ git diff --check
 uv run python scripts/run_eval.py
 uv run python scripts/run_eval.py --format json
 cd frontend
-npm install
 npm run typecheck
 npm run build
 ```
@@ -56,7 +63,7 @@ Stage 7 procurement и maintenance_lite tests должны оставаться 
 
 Stage 8 API и eval tests должны оставаться offline и deterministic. API tests должны использовать только local test clients, temporary SQLite storage и deterministic mock/fake providers. Eval runner должен проверять endpoints `/api/v1`, а не application runtimes напрямую, и `scripts/run_eval.py` должен проходить до того, как Stage 8 acceptance считается завершённым.
 
-Stage 9 frontend validation должна оставаться local/demo и не должна напрямую вызывать real provider или enterprise network paths. Frontend взаимодействует только с FastAPI `/api/v1` через `frontend/src/api/`, а browser localStorage может хранить только run IDs.
+Stage 9 frontend validation должна оставаться local/demo и не должна напрямую вызывать real provider или enterprise network paths. Frontend взаимодействует только с FastAPI `/api/v1` через `frontend/src/api/`. Browser localStorage хранит только convenience state — known/selected run data и locale preference — и не является backend truth; storage failures должны безопасно деградировать без application failure.
 
 ## 3. Manual Smoke Boundary
 
@@ -113,12 +120,13 @@ db/
 * State-changing tools требуют policy checks.
 * Risky state-changing tools требуют approval.
 * Audit events не должны содержать secrets.
-* DB persistence сохраняет уже validated facts и не должен владеть workflow или policy decisions.
+* DB persistence сохраняет уже validated facts и не должен владеть general workflow или policy decisions. Узкий atomic pending-to-terminal approval claim остаётся persistence ownership boundary против двух concurrent terminal winners.
 * Stage 7 procurement и maintenance_lite controlled actions являются synthetic draft-only actions и не должны добавлять domain DB tables или real connectors.
 * Stage 8 API routes являются только inbound adapters. Application runtimes владеют workflow orchestration; routes не должны владеть policy, approval, tool execution, workflow transition или audit logic.
 * Stage 8 evals являются deterministic acceptance checks, а не model benchmarks, prompt optimization, provider comparison или production observability.
 * Stage 9 frontend — это независимый React/Vite client в `frontend/`.
   `frontend/src/api/` владеет HTTP calls к `/api/v1`; случайные UI components не должны вызывать `fetch` напрямую или импортировать backend internals. UI copy не должна заявлять unsupported production/admin features, такие как auth, RBAC, tenants, provider management, policy editing, global audit search или global approval queues.
+  RU/EN localization меняет только presentation: API paths/keys, canonical IDs/enums, raw JSON и backend-provided text остаются исходными, а locale switch не должен reset current form/run/approval state.
 
 ## 5. Source-of-Truth Docs
 

@@ -14,44 +14,49 @@ const SERVER_SNAPSHOT: KnownRunsSnapshot = {
   selectedRunId: null
 };
 
-let cachedKnownRunIdsRaw: string | null = null;
-let cachedSelectedRunIdRaw: string | null = null;
 let cachedSnapshot: KnownRunsSnapshot = SERVER_SNAPSHOT;
+let hasHydratedFromStorage = false;
+let storageUsable = true;
 
 export function useKnownRuns(): KnownRunsSnapshot {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 export function addKnownRunId(runId: string): void {
-  if (!runId.trim()) {
+  const normalizedRunId = runId.trim();
+  if (!normalizedRunId) {
     return;
   }
-  const current = readKnownRunIds();
-  const next = [runId, ...current.filter((id) => id !== runId)].slice(0, 25);
-  writeJson(KNOWN_RUN_IDS_KEY, next);
-  setSelectedRunId(runId);
-  notify();
+  const current = getClientSnapshot();
+  replaceSnapshot({
+    knownRunIds: [normalizedRunId, ...current.knownRunIds.filter((id) => id !== normalizedRunId)].slice(0, 25),
+    selectedRunId: normalizedRunId
+  });
 }
 
 export function removeKnownRunId(runId: string): void {
-  const next = readKnownRunIds().filter((id) => id !== runId);
-  writeJson(KNOWN_RUN_IDS_KEY, next);
-  if (readSelectedRunId() === runId) {
-    writeString(SELECTED_RUN_ID_KEY, next[0] ?? null);
-  }
-  notify();
+  const current = getClientSnapshot();
+  const nextKnownRunIds = current.knownRunIds.filter((id) => id !== runId);
+  replaceSnapshot({
+    knownRunIds: nextKnownRunIds,
+    selectedRunId: current.selectedRunId === runId ? nextKnownRunIds[0] ?? null : current.selectedRunId
+  });
 }
 
 export function setSelectedRunId(runId: string | null): void {
-  const normalized = runId && runId.trim() ? runId : null;
-  writeString(SELECTED_RUN_ID_KEY, normalized);
-  notify();
+  const normalized = runId?.trim() || null;
+  const current = getClientSnapshot();
+  if (current.selectedRunId === normalized) {
+    return;
+  }
+  replaceSnapshot({
+    knownRunIds: current.knownRunIds,
+    selectedRunId: normalized
+  });
 }
 
 export function clearKnownRuns(): void {
-  writeJson(KNOWN_RUN_IDS_KEY, []);
-  writeString(SELECTED_RUN_ID_KEY, null);
-  notify();
+  replaceSnapshot(SERVER_SNAPSHOT);
 }
 
 function subscribe(callback: () => void): () => void {
@@ -61,6 +66,7 @@ function subscribe(callback: () => void): () => void {
 
   const onStorage = (event: StorageEvent) => {
     if (event.key === KNOWN_RUN_IDS_KEY || event.key === SELECTED_RUN_ID_KEY) {
+      hydrateSnapshotFromStorage(true);
       callback();
     }
   };
@@ -78,28 +84,11 @@ function getSnapshot(): KnownRunsSnapshot {
   if (typeof window === "undefined") {
     return SERVER_SNAPSHOT;
   }
-
-  const knownRunIdsRaw = window.localStorage.getItem(KNOWN_RUN_IDS_KEY);
-  const selectedRunIdRaw = window.localStorage.getItem(SELECTED_RUN_ID_KEY);
-  if (knownRunIdsRaw === cachedKnownRunIdsRaw && selectedRunIdRaw === cachedSelectedRunIdRaw) {
-    return cachedSnapshot;
-  }
-
-  cachedKnownRunIdsRaw = knownRunIdsRaw;
-  cachedSelectedRunIdRaw = selectedRunIdRaw;
-  cachedSnapshot = {
-    knownRunIds: parseKnownRunIds(knownRunIdsRaw),
-    selectedRunId: normalizeRunId(selectedRunIdRaw)
-  };
-  return cachedSnapshot;
+  return getClientSnapshot();
 }
 
 function getServerSnapshot(): KnownRunsSnapshot {
   return SERVER_SNAPSHOT;
-}
-
-function readKnownRunIds(): string[] {
-  return parseKnownRunIds(readRaw(KNOWN_RUN_IDS_KEY));
 }
 
 function parseKnownRunIds(value: string | null): string[] {
@@ -107,25 +96,19 @@ function parseKnownRunIds(value: string | null): string[] {
   if (!Array.isArray(parsed)) {
     return [];
   }
-  return parsed.filter((value): value is string => typeof value === "string");
-}
-
-function readSelectedRunId(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  return normalizeRunId(window.localStorage.getItem(SELECTED_RUN_ID_KEY));
+  return Array.from(
+    new Set(
+      parsed
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 25);
 }
 
 function normalizeRunId(value: string | null): string | null {
-  return value && value.trim() ? value : null;
-}
-
-function readRaw(key: string): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  return window.localStorage.getItem(key);
+  const normalized = value?.trim() ?? "";
+  return normalized || null;
 }
 
 function readJson(value: string | null): unknown {
@@ -139,22 +122,89 @@ function readJson(value: string | null): unknown {
   }
 }
 
-function writeJson(key: string, value: unknown): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(key, JSON.stringify(value));
+function getClientSnapshot(): KnownRunsSnapshot {
+  hydrateSnapshotFromStorage(false);
+  return cachedSnapshot;
 }
 
-function writeString(key: string, value: string | null): void {
-  if (typeof window === "undefined") {
+function hydrateSnapshotFromStorage(force: boolean): void {
+  if (typeof window === "undefined" || (hasHydratedFromStorage && !force)) {
     return;
   }
-  if (value === null) {
+  hasHydratedFromStorage = true;
+
+  const knownRunIdsRaw = safeReadStorage(KNOWN_RUN_IDS_KEY);
+  const selectedRunIdRaw = safeReadStorage(SELECTED_RUN_ID_KEY);
+  const nextKnownRunIds = knownRunIdsRaw.ok ? parseKnownRunIds(knownRunIdsRaw.value) : cachedSnapshot.knownRunIds;
+  const nextSelectedRunId = selectedRunIdRaw.ok
+    ? normalizeRunId(selectedRunIdRaw.value)
+    : cachedSnapshot.selectedRunId;
+  if (
+    arraysEqual(cachedSnapshot.knownRunIds, nextKnownRunIds) &&
+    cachedSnapshot.selectedRunId === nextSelectedRunId
+  ) {
+    return;
+  }
+  cachedSnapshot = {
+    knownRunIds: nextKnownRunIds,
+    selectedRunId: nextSelectedRunId
+  };
+}
+
+function replaceSnapshot(nextSnapshot: KnownRunsSnapshot): void {
+  cachedSnapshot = nextSnapshot;
+  hasHydratedFromStorage = true;
+  if (typeof window !== "undefined") {
+    safeWriteStorage(KNOWN_RUN_IDS_KEY, JSON.stringify(nextSnapshot.knownRunIds));
+    if (nextSnapshot.selectedRunId === null) {
+      safeRemoveStorage(SELECTED_RUN_ID_KEY);
+    } else {
+      safeWriteStorage(SELECTED_RUN_ID_KEY, nextSnapshot.selectedRunId);
+    }
+  }
+  notify();
+}
+
+function safeReadStorage(key: string): { ok: true; value: string | null } | { ok: false } {
+  if (!storageUsable) {
+    return { ok: false };
+  }
+  try {
+    return { ok: true, value: window.localStorage.getItem(key) };
+  } catch {
+    storageUsable = false;
+    return { ok: false };
+  }
+}
+
+function safeWriteStorage(key: string, value: string): boolean {
+  if (!storageUsable) {
+    return false;
+  }
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    storageUsable = false;
+    return false;
+  }
+}
+
+function safeRemoveStorage(key: string): boolean {
+  if (!storageUsable) {
+    return false;
+  }
+  try {
     window.localStorage.removeItem(key);
-    return;
+    return true;
+  } catch {
+    storageUsable = false;
+    return false;
   }
-  window.localStorage.setItem(key, value);
+}
+
+function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function notify(): void {

@@ -1,7 +1,7 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiBaseUrl } from "../api/client";
-import { getRunApprovals, getRunDetail } from "../api/runs";
+import { getRunApprovals, getRunDetail, settleRunReads, type RunReadSummary } from "../api/runs";
 import { toDisplayError } from "../api/errors";
 import type { ApprovalResponse, NormalizedApiError, RunDetailResponse } from "../api/types";
 import { DataTable, type DataTableColumn } from "../components/data/DataTable";
@@ -17,58 +17,107 @@ import { CapabilitiesPanel } from "../features/capabilities/CapabilitiesPanel";
 import { useApiStatus } from "../features/capabilities/useApiStatus";
 import { WorkflowCard } from "../features/workflows/WorkflowCard";
 import { isWorkflowAvailable, workflowRegistry } from "../features/workflows/registry";
+import { useLocale } from "../i18n/LocaleProvider";
+import type { Translator } from "../i18n/messages";
 import { addKnownRunId, useKnownRuns } from "../state/knownRuns";
 
 type RunRow = RunDetailResponse["run"];
 
-const runColumns: DataTableColumn<RunRow>[] = [
-  { key: "id", header: "Run ID", render: (row) => <Link to={`/runs/${row.id}`}>{row.id}</Link> },
-  { key: "request", header: "Request Type", render: (row) => <code>{row.request_type}</code> },
-  {
-    key: "status",
-    header: "Status",
-    render: (row) => {
-      const status = getRunStatusPresentation(row.status);
-      return <StatusChip label={status.label} tone={status.tone} title={status.description} />;
-    }
-  },
-  { key: "risk", header: "Risk", render: (row) => <RiskBadge risk={row.risk_level} /> },
-  { key: "updated", header: "Updated", render: (row) => <time>{row.updated_at}</time> }
-];
+type AggregateReadState = {
+  ownerKey: string;
+  summary: RunReadSummary;
+};
+
+function getRunColumns(t: Translator): DataTableColumn<RunRow>[] {
+  return [
+    { key: "id", header: t("common.runId"), render: (row) => <Link to={`/runs/${row.id}`}>{row.id}</Link> },
+    { key: "request", header: t("common.requestType"), render: (row) => <code>{row.request_type}</code> },
+    {
+      key: "status",
+      header: t("common.status"),
+      render: (row) => {
+        const status = getRunStatusPresentation(row.status, t);
+        return <StatusChip label={status.label} tone={status.tone} title={status.description} />;
+      }
+    },
+    { key: "risk", header: t("common.risk"), render: (row) => <RiskBadge risk={row.risk_level} /> },
+    { key: "updated", header: t("common.updated"), render: (row) => <time>{row.updated_at}</time> }
+  ];
+}
 
 export function DashboardPage() {
+  const { t } = useLocale();
   const navigate = useNavigate();
   const { knownRunIds } = useKnownRuns();
-  const { health, capabilities, loading: apiLoading, error: apiError } = useApiStatus();
+  const { health, capabilities, loading: apiLoading, stale: apiStale, error: apiError } = useApiStatus();
   const [runRows, setRunRows] = useState<RunRow[]>([]);
+  const [runSnapshotOwnerKey, setRunSnapshotOwnerKey] = useState<string | null>(null);
+  const [runReadState, setRunReadState] = useState<AggregateReadState | null>(null);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalResponse[]>([]);
+  const [approvalSnapshotOwnerKey, setApprovalSnapshotOwnerKey] = useState<string | null>(null);
+  const [approvalReadState, setApprovalReadState] = useState<AggregateReadState | null>(null);
   const [manualRunId, setManualRunId] = useState("");
   const [runsLoading, setRunsLoading] = useState(false);
-  const [runsError, setRunsError] = useState<NormalizedApiError | null>(null);
+  const [openError, setOpenError] = useState<NormalizedApiError | null>(null);
   const [openingRun, setOpeningRun] = useState(false);
+  const mountedRef = useRef(false);
+  const openRequestIdRef = useRef(0);
   const available = capabilities?.workflows ?? null;
+  const knownRunsKey = knownRunIds.join("\u001f");
+  const hasCurrentRunSnapshot = runSnapshotOwnerKey === knownRunsKey;
+  const hasCurrentApprovalSnapshot = approvalSnapshotOwnerKey === knownRunsKey;
+  const currentRunRows = hasCurrentRunSnapshot ? runRows : [];
+  const currentPendingApprovals = hasCurrentApprovalSnapshot ? pendingApprovals : [];
+  const currentRunReadSummary = runReadState?.ownerKey === knownRunsKey ? runReadState.summary : null;
+  const currentApprovalReadSummary =
+    approvalReadState?.ownerKey === knownRunsKey ? approvalReadState.summary : null;
+  const runsUnavailable =
+    currentRunReadSummary !== null && currentRunReadSummary.attempted > 0 && currentRunReadSummary.succeeded === 0;
+  const runsPartial =
+    currentRunReadSummary !== null && currentRunReadSummary.succeeded > 0 && currentRunReadSummary.failures.length > 0;
+  const approvalsUnavailable =
+    currentApprovalReadSummary !== null &&
+    currentApprovalReadSummary.attempted > 0 &&
+    currentApprovalReadSummary.succeeded === 0;
+  const approvalsPartial =
+    currentApprovalReadSummary !== null &&
+    currentApprovalReadSummary.succeeded > 0 &&
+    currentApprovalReadSummary.failures.length > 0;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      openRequestIdRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     setRunsLoading(true);
-    setRunsError(null);
 
-    Promise.all(
-      knownRunIds.map((runId) =>
-        getRunDetail(runId).catch(() => {
-          return null;
-        })
-      )
-    )
-      .then((details) => {
+    Promise.all([
+      settleRunReads(knownRunIds, getRunDetail),
+      settleRunReads(knownRunIds, getRunApprovals)
+    ])
+      .then(([details, approvals]) => {
         if (cancelled) {
           return;
         }
-        setRunRows(details.filter((detail): detail is RunDetailResponse => detail !== null).map((detail) => detail.run));
-      })
-      .catch((nextError: unknown) => {
-        if (!cancelled) {
-          setRunsError(toDisplayError(nextError));
+        setRunReadState({ ownerKey: knownRunsKey, summary: details });
+        if (details.attempted === 0 || details.succeeded > 0) {
+          setRunRows(details.successes.map(({ value }) => value.run));
+          setRunSnapshotOwnerKey(knownRunsKey);
+        }
+
+        setApprovalReadState({ ownerKey: knownRunsKey, summary: approvals });
+        if (approvals.attempted === 0 || approvals.succeeded > 0) {
+          setPendingApprovals(
+            approvals.successes
+              .flatMap(({ value }) => value)
+              .filter((approval) => approval.status === "PENDING")
+          );
+          setApprovalSnapshotOwnerKey(knownRunsKey);
         }
       })
       .finally(() => {
@@ -77,22 +126,10 @@ export function DashboardPage() {
         }
       });
 
-    Promise.all(
-      knownRunIds.map((runId) =>
-        getRunApprovals(runId).catch(() => {
-          return [] as ApprovalResponse[];
-        })
-      )
-    ).then((responses) => {
-      if (!cancelled) {
-        setPendingApprovals(responses.flat().filter((approval) => approval.status === "PENDING"));
-      }
-    });
-
     return () => {
       cancelled = true;
     };
-  }, [knownRunIds]);
+  }, [knownRunIds, knownRunsKey]);
 
   async function openRun(event: FormEvent) {
     event.preventDefault();
@@ -100,112 +137,205 @@ export function DashboardPage() {
     if (!candidateRunId) {
       return;
     }
+    const requestId = ++openRequestIdRef.current;
     setOpeningRun(true);
-    setRunsError(null);
+    setOpenError(null);
     try {
       const response = await getRunDetail(candidateRunId);
+      if (!mountedRef.current || openRequestIdRef.current !== requestId) {
+        return;
+      }
       addKnownRunId(response.run.id);
       setManualRunId("");
       navigate(`/runs/${response.run.id}`);
     } catch (nextError) {
-      setRunsError(toDisplayError(nextError));
+      if (mountedRef.current && openRequestIdRef.current === requestId) {
+        setOpenError(toDisplayError(nextError));
+      }
     } finally {
-      setOpeningRun(false);
+      if (mountedRef.current && openRequestIdRef.current === requestId) {
+        setOpeningRun(false);
+      }
     }
   }
 
-  const lastKnownRun = runRows[0] ?? null;
+  const lastKnownRun = currentRunRows[0] ?? null;
+  const lastKnownStatus = lastKnownRun ? getRunStatusPresentation(lastKnownRun.status, t) : null;
+  const runColumns = getRunColumns(t);
+  const pendingApprovalsValue = approvalsUnavailable
+    ? hasCurrentApprovalSnapshot
+      ? `${currentPendingApprovals.length} (${t("common.stale")})`
+      : t("dashboard.unavailable")
+    : approvalsPartial
+      ? `${currentPendingApprovals.length}+`
+      : !hasCurrentApprovalSnapshot && knownRunIds.length > 0
+        ? t("dashboard.checkingTitle")
+        : currentPendingApprovals.length;
+  const pendingApprovalsHelper = approvalsUnavailable
+    ? hasCurrentApprovalSnapshot
+      ? t("dashboard.lastKnownReadsFailed")
+      : t("dashboard.approvalReadsFailedShort")
+    : approvalsPartial
+      ? t("dashboard.runsReadIncomplete", {
+          succeeded: currentApprovalReadSummary?.succeeded ?? 0,
+          attempted: currentApprovalReadSummary?.attempted ?? 0
+        })
+      : t("dashboard.localApprovalsOnly");
 
   return (
     <div className="page-stack">
       <PageHeader
-        title="Gateway Command Center"
-        eyebrow="Local demo UI"
-        description="A run-centric surface over the FastAPI /api/v1 contract."
+        title={t("dashboard.title")}
+        eyebrow={t("dashboard.eyebrow")}
+        description={t("dashboard.description")}
         actions={
           <form className="inline-form inline-form--compact" onSubmit={openRun}>
             <input
-              aria-label="Open run ID"
-              placeholder="Paste run_id"
+              aria-label={t("common.openRunAria")}
+              placeholder={t("common.pasteRunId")}
               value={manualRunId}
               onChange={(event) => setManualRunId(event.target.value)}
             />
             <ActionButton type="submit" variant="primary" className="action-button--compact" disabled={openingRun}>
-              {openingRun ? "Opening..." : "Open Run"}
+              {openingRun ? t("common.opening") : t("common.openRun")}
             </ActionButton>
           </form>
         }
       />
       {apiError ? <ErrorState error={apiError} /> : null}
+      {openError ? <ErrorState error={openError} /> : null}
+      {approvalsPartial || approvalsUnavailable ? (
+        <div
+          className={`state-box ${approvalsUnavailable ? "state-box--error" : "state-box--warning"}`}
+          role={approvalsUnavailable ? "alert" : "status"}
+        >
+          <strong>
+            {approvalsUnavailable
+              ? t("dashboard.approvalCountsUnavailable")
+              : t("dashboard.approvalCountsIncomplete")}
+          </strong>
+          <span>
+            {approvalsUnavailable
+              ? `${t("dashboard.noApprovalData", { count: currentApprovalReadSummary?.attempted ?? 0 })}${
+                  hasCurrentApprovalSnapshot ? ` ${t("common.showingLastCount")}` : ""
+                }`
+              : t("dashboard.approvalReadsFailed", {
+                  failed: currentApprovalReadSummary?.failures.length ?? 0,
+                  attempted: currentApprovalReadSummary?.attempted ?? 0
+                })}
+          </span>
+        </div>
+      ) : null}
       <div className="metric-grid">
         <MetricCard
-          label="API Health"
-          value={apiLoading ? "checking" : health?.status ?? "unknown"}
-          helper={apiBaseUrl}
-          tone={health?.status === "ok" ? "good" : "warn"}
+          label={t("dashboard.apiHealth")}
+          value={
+            apiLoading
+              ? t("dashboard.checking")
+              : `${health?.status ?? t("common.unknown")}${apiStale ? ` (${t("common.stale")})` : ""}`
+          }
+          helper={apiStale ? `${apiBaseUrl} / ${t("dashboard.lastRefreshFailed")}` : apiBaseUrl}
+          tone={apiStale ? "warn" : health?.status === "ok" ? "good" : "warn"}
         />
         <MetricCard
-          label="Provider Mode"
-          value={capabilities?.provider_mode ?? "unknown"}
-          helper="from capabilities"
+          label={t("dashboard.providerMode")}
+          value={capabilities?.provider_mode ?? t("common.unknown")}
+          helper={t("dashboard.fromCapabilities")}
           tone={capabilities?.provider_mode === "mock" ? "info" : "warn"}
         />
         <MetricCard
-          label="Model Selection"
-          value={capabilities?.model_selection.enabled ? "enabled" : "disabled"}
-          helper="provider/model selector is not exposed"
+          label={t("dashboard.modelSelection")}
+          value={capabilities?.model_selection.enabled ? t("common.enabled") : t("common.disabled")}
+          helper={t("dashboard.modelSelectorHidden")}
           tone={capabilities?.model_selection.enabled ? "warn" : "default"}
         />
         <MetricCard
-          label="Available Workflows"
+          label={t("dashboard.availableWorkflows")}
           value={capabilities?.workflows.length ?? 0}
-          helper="backend-supported templates"
+          helper={t("dashboard.backendTemplates")}
           tone="default"
         />
-        <MetricCard label="Known Runs" value={knownRunIds.length} helper="local/session run IDs only" tone="info" />
         <MetricCard
-          label="Pending Approvals"
-          value={pendingApprovals.length}
-          helper="from locally known runs only"
-          tone={pendingApprovals.length > 0 ? "warn" : "default"}
+          label={t("dashboard.knownRuns")}
+          value={knownRunIds.length}
+          helper={t("dashboard.localRunIdsOnly")}
+          tone="info"
+        />
+        <MetricCard
+          label={t("dashboard.pendingApprovals")}
+          value={pendingApprovalsValue}
+          helper={pendingApprovalsHelper}
+          tone={approvalsUnavailable || approvalsPartial || currentPendingApprovals.length > 0 ? "warn" : "default"}
         />
       </div>
       <div className="content-with-inspector">
         <section className="panel">
           <div className="panel__header">
-            <h2>Session Run Snapshot</h2>
-            <Link to="/runs">Open Agent Runs</Link>
+            <h2>{t("dashboard.sessionSnapshot")}</h2>
+            <Link to="/runs">{t("dashboard.openAgentRuns")}</Link>
           </div>
-          {runsLoading ? <LoadingState label="Loading known runs..." /> : null}
-          {runsError ? <ErrorState error={runsError} /> : null}
-          <DataTable columns={runColumns} rows={runRows} rowKey={(row) => row.id} emptyLabel="No known runs yet." />
+          {runsLoading && !hasCurrentRunSnapshot && !runsUnavailable ? (
+            <LoadingState label={t("dashboard.loadingRuns")} />
+          ) : null}
+          {runsPartial || runsUnavailable ? (
+            <div
+              className={`state-box ${runsUnavailable ? "state-box--error" : "state-box--warning"}`}
+              role={runsUnavailable ? "alert" : "status"}
+            >
+              <strong>
+                {runsUnavailable ? t("dashboard.runSnapshotUnavailable") : t("dashboard.runSnapshotIncomplete")}
+              </strong>
+              <span>
+                {runsUnavailable
+                  ? `${t("dashboard.noRunsRead", { count: currentRunReadSummary?.attempted ?? 0 })}${
+                      hasCurrentRunSnapshot ? ` ${t("common.showingLastSnapshot")}` : ""
+                    }`
+                  : t("dashboard.runReadsFailed", {
+                      failed: currentRunReadSummary?.failures.length ?? 0,
+                      attempted: currentRunReadSummary?.attempted ?? 0
+                    })}
+              </span>
+            </div>
+          ) : null}
+          {hasCurrentRunSnapshot ? (
+            <DataTable
+              columns={runColumns}
+              rows={currentRunRows}
+              rowKey={(row) => row.id}
+              emptyLabel={
+                runsPartial
+                  ? t("dashboard.noReadableSuccessfulRuns")
+                  : t("dashboard.noKnownRunsYet")
+              }
+            />
+          ) : null}
         </section>
         <div className="stack">
-          <CapabilitiesPanel health={health} capabilities={capabilities} />
+          <CapabilitiesPanel health={health} capabilities={capabilities} stale={apiStale} />
           <section className="panel">
-            <h2>Last Known Run</h2>
+            <h2>{t("dashboard.lastKnownRun")}</h2>
             {lastKnownRun ? (
               <div className="kv-grid">
-                <span>Run ID</span>
+                <span>{t("common.runId")}</span>
                 <Link to={`/runs/${lastKnownRun.id}`}>{lastKnownRun.id}</Link>
-                <span>Status</span>
+                <span>{t("common.status")}</span>
                 <StatusChip
-                  label={getRunStatusPresentation(lastKnownRun.status).label}
-                  tone={getRunStatusPresentation(lastKnownRun.status).tone}
+                  label={lastKnownStatus?.label ?? t("common.unknown")}
+                  tone={lastKnownStatus?.tone ?? "gray"}
                 />
-                <span>Updated</span>
+                <span>{t("common.updated")}</span>
                 <time>{lastKnownRun.updated_at}</time>
               </div>
             ) : (
-              <p className="muted">Submit or open a run to populate this panel.</p>
+              <p className="muted">{t("dashboard.populateLastRun")}</p>
             )}
           </section>
         </div>
       </div>
       <section className="panel">
         <div className="panel__header">
-          <h2>Quick Launch</h2>
-          <Link to="/workflows">Workflow catalog</Link>
+          <h2>{t("dashboard.quickLaunch")}</h2>
+          <Link to="/workflows">{t("dashboard.workflowCatalog")}</Link>
         </div>
         <div className="workflow-grid">
           {workflowRegistry.map((workflow) => (

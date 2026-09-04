@@ -10,36 +10,47 @@ import { ActionButton } from "../components/forms/ActionButton";
 import { PageHeader } from "../components/layout/PageHeader";
 import { AuditTimeline } from "../features/audit/AuditTimeline";
 import { setSelectedRunId } from "../state/knownRuns";
+import { useLocale } from "../i18n/LocaleProvider";
+
+type RunOwnedError = {
+  runId: string;
+  error: NormalizedApiError;
+};
 
 export function RunAuditTrailPage() {
+  const { t } = useLocale();
   const { runId = "" } = useParams();
   const [events, setEvents] = useState<AuditEventResponse[]>([]);
+  const [loadedRunId, setLoadedRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
+  const [errorState, setErrorState] = useState<RunOwnedError | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
-  const { toast, showToast } = useToast();
+  const { toast, showToast, clearToast } = useToast();
+
+  const hasCurrentSnapshot = loadedRunId === runId;
+  const currentEvents = hasCurrentSnapshot ? events : [];
+  const currentError = errorState?.runId === runId ? errorState.error : null;
 
   useEffect(() => {
     let cancelled = false;
-    const hadLoaded = hasLoaded;
-    const manualRefresh = refreshToken > 0;
+    const hadLoaded = loadedRunId === runId;
+    const manualRefresh = hadLoaded && refreshToken > 0;
     setLoading(true);
     if (!hadLoaded) {
-      setError(null);
+      clearToast();
     }
+    setErrorState(null);
     getRunAuditEvents(runId)
       .then((response) => {
         if (!cancelled) {
           setEvents(response);
-          setHasLoaded(true);
-          setError(null);
-          const confirmedRunId = response[0]?.run_id ?? runId;
-          if (confirmedRunId) {
-            setSelectedRunId(confirmedRunId);
+          setLoadedRunId(runId);
+          setErrorState(null);
+          if (runId) {
+            setSelectedRunId(runId);
           }
           if (manualRefresh) {
-            showToast({ message: "Data refreshed", tone: "success" });
+            showToast({ messageKey: "common.dataRefreshed", tone: "success" });
           }
         }
       })
@@ -48,10 +59,9 @@ export function RunAuditTrailPage() {
           return;
         }
         const displayError = toDisplayError(nextError);
+        setErrorState({ runId, error: displayError });
         if (hadLoaded) {
-          showToast({ message: "Refresh failed", tone: "error" });
-        } else {
-          setError(displayError);
+          showToast({ messageKey: "common.refreshFailed", tone: "error" });
         }
       })
       .finally(() => {
@@ -62,9 +72,9 @@ export function RunAuditTrailPage() {
     return () => {
       cancelled = true;
     };
-  }, [runId, refreshToken, showToast]);
+  }, [runId, refreshToken, showToast, clearToast]);
 
-  const initialLoading = loading && !hasLoaded;
+  const initialLoading = !hasCurrentSnapshot && currentError === null;
 
   function refreshAuditEvents() {
     if (!loading) {
@@ -75,24 +85,25 @@ export function RunAuditTrailPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Run Audit Trail"
-        eyebrow="Run-scoped view"
-        description="Audit events are chronological records for one backend run."
+        title={t("runAudit.title")}
+        eyebrow={t("runAudit.eyebrow")}
+        description={t("runAudit.description")}
         actions={
           <ActionButton
             type="button"
             className="action-button--compact"
             onClick={refreshAuditEvents}
-            aria-busy={loading && hasLoaded}
+            aria-busy={loading && hasCurrentSnapshot}
+            disabled={loading}
           >
-            Refresh
+            {t("common.refresh")}
           </ActionButton>
         }
       />
-      {initialLoading ? <LoadingState label="Loading audit events..." /> : null}
-      {error && !hasLoaded ? <ErrorState error={error} /> : null}
-      <AuditTimeline events={events} />
-      <Toast toast={toast} />
+      {initialLoading ? <LoadingState label={t("runAudit.loading")} /> : null}
+      {currentError ? <ErrorState error={currentError} /> : null}
+      {hasCurrentSnapshot ? <AuditTimeline events={currentEvents} /> : null}
+      <Toast toast={hasCurrentSnapshot ? toast : null} />
     </div>
   );
 }

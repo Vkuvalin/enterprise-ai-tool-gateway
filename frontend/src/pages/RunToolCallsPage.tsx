@@ -10,36 +10,47 @@ import { ActionButton } from "../components/forms/ActionButton";
 import { PageHeader } from "../components/layout/PageHeader";
 import { ToolCallsTable } from "../features/toolCalls/ToolCallsTable";
 import { setSelectedRunId } from "../state/knownRuns";
+import { useLocale } from "../i18n/LocaleProvider";
+
+type RunOwnedError = {
+  runId: string;
+  error: NormalizedApiError;
+};
 
 export function RunToolCallsPage() {
+  const { t } = useLocale();
   const { runId = "" } = useParams();
   const [toolCalls, setToolCalls] = useState<ToolCallResponse[]>([]);
+  const [loadedRunId, setLoadedRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
+  const [errorState, setErrorState] = useState<RunOwnedError | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
-  const { toast, showToast } = useToast();
+  const { toast, showToast, clearToast } = useToast();
+
+  const hasCurrentSnapshot = loadedRunId === runId;
+  const currentToolCalls = hasCurrentSnapshot ? toolCalls : [];
+  const currentError = errorState?.runId === runId ? errorState.error : null;
 
   useEffect(() => {
     let cancelled = false;
-    const hadLoaded = hasLoaded;
-    const manualRefresh = refreshToken > 0;
+    const hadLoaded = loadedRunId === runId;
+    const manualRefresh = hadLoaded && refreshToken > 0;
     setLoading(true);
     if (!hadLoaded) {
-      setError(null);
+      clearToast();
     }
+    setErrorState(null);
     getRunToolCalls(runId)
       .then((response) => {
         if (!cancelled) {
           setToolCalls(response);
-          setHasLoaded(true);
-          setError(null);
-          const confirmedRunId = response[0]?.run_id ?? runId;
-          if (confirmedRunId) {
-            setSelectedRunId(confirmedRunId);
+          setLoadedRunId(runId);
+          setErrorState(null);
+          if (runId) {
+            setSelectedRunId(runId);
           }
           if (manualRefresh) {
-            showToast({ message: "Data refreshed", tone: "success" });
+            showToast({ messageKey: "common.dataRefreshed", tone: "success" });
           }
         }
       })
@@ -48,10 +59,9 @@ export function RunToolCallsPage() {
           return;
         }
         const displayError = toDisplayError(nextError);
+        setErrorState({ runId, error: displayError });
         if (hadLoaded) {
-          showToast({ message: "Refresh failed", tone: "error" });
-        } else {
-          setError(displayError);
+          showToast({ messageKey: "common.refreshFailed", tone: "error" });
         }
       })
       .finally(() => {
@@ -62,9 +72,9 @@ export function RunToolCallsPage() {
     return () => {
       cancelled = true;
     };
-  }, [runId, refreshToken, showToast]);
+  }, [runId, refreshToken, showToast, clearToast]);
 
-  const initialLoading = loading && !hasLoaded;
+  const initialLoading = !hasCurrentSnapshot && currentError === null;
 
   function refreshToolCalls() {
     if (!loading) {
@@ -75,24 +85,25 @@ export function RunToolCallsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Run Tool Calls"
-        eyebrow="Run-scoped view"
-        description="Tool calls are read from /api/v1 for the selected run only."
+        title={t("runToolCalls.title")}
+        eyebrow={t("runToolCalls.eyebrow")}
+        description={t("runToolCalls.description")}
         actions={
           <ActionButton
             type="button"
             className="action-button--compact"
             onClick={refreshToolCalls}
-            aria-busy={loading && hasLoaded}
+            aria-busy={loading && hasCurrentSnapshot}
+            disabled={loading}
           >
-            Refresh
+            {t("common.refresh")}
           </ActionButton>
         }
       />
-      {initialLoading ? <LoadingState label="Loading tool calls..." /> : null}
-      {error && !hasLoaded ? <ErrorState error={error} /> : null}
-      <ToolCallsTable toolCalls={toolCalls} />
-      <Toast toast={toast} />
+      {initialLoading ? <LoadingState label={t("runToolCalls.loading")} /> : null}
+      {currentError ? <ErrorState error={currentError} /> : null}
+      {hasCurrentSnapshot ? <ToolCallsTable toolCalls={currentToolCalls} /> : null}
+      <Toast toast={hasCurrentSnapshot ? toast : null} />
     </div>
   );
 }
