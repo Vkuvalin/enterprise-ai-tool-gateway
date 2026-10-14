@@ -41,15 +41,25 @@ Runtime files являются локальными artifacts в `.runtime/`:
 .runtime/logs/<instance-id>/frontend.log
 ```
 
-Service records создаются только для processes, фактически запущенных этим runner instance. Они связывают instance/service, PID, process start identity, repository root и exact log path; reused services не становятся owned. `Q` использует captured metadata текущего window и перед termination повторно проверяет PID/start identity, literal command markers и process ancestry. Если proof недоступен, cleanup fail-closed и сохраняет process/metadata для диагностики.
+Frontend Runner запускает Vite CLI напрямую через `node.exe`, без `npm.cmd`, чтобы `Ctrl+C` не оставлял внутренний batch-запрос `Y/N`. Вывод консоли и дочернего Python использует UTF-8; per-instance logs сохраняются в UTF-8.
 
-Нажмите `Q` в controlling PowerShell window, чтобы остановить только процессы, запущенные этим runner instance. Чтобы остановить все verified runner-owned instances, выполните:
+Service records создаются только для processes, фактически запущенных этим Runner. Они связывают instance/service, PID, process start identity, repository root и exact log path; reused services не становятся owned. `runner_processes.cs` создаёт новый process сразу внутри Windows Job Object (Windows 10/11), затем снимает его с suspension; потомки наследуют job, а его handle остаётся только у Runner. Закрытие окна или аварийное завершение Runner освобождает handle и завершает owned tree. Вывод backend/frontend одновременно виден в консоли и сохраняется в per-instance logs.
+
+Нажмите `Ctrl+C` в PowerShell-окне для штатной остановки: Runner ждёт до восьми секунд и завершает оставшиеся owned processes. Закрытие окна также останавливает owned tree; `Q` остаётся дополнительным способом остановки. Reused services сохраняют своего владельца. Чтобы остановить старые verified runner-owned instances, выполните:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1
 ```
 
 Stop script перечисляет только per-instance records, удаляет safely stale dead records и не выводит ownership из port, process name или PID alone. Invalid/unverifiable records остаются нетронутыми, а script возвращает non-zero exit. Legacy shared `.runtime/demo-*.pid` намеренно игнорируются. Logs могут остаться после cleanup для диагностики.
+
+Проверка Runner lifecycle на Windows (localhost, mock provider, isolated SQLite; порты 8000 и 5173 должны быть свободны):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/test_runner.ps1
+```
+
+Harness проверяет `Ctrl+C`, аварийное завершение своего Runner, повторные запуски, reuse, остановку во время старта, чужой занятый порт и ошибку частичного старта. Логи и test data находятся в `.runtime/test_runner/`; неизвестные процессы не останавливаются.
 
 ## 3. Backend setup and run
 

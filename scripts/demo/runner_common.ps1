@@ -50,7 +50,7 @@ function Get-DemoExpectedCommandMarkers {
 
     return @(
         "GATEWAY_DEMO_INSTANCE=$InstanceId",
-        "run dev",
+        (Join-Path $RepoRoot "frontend\node_modules\vite\bin\vite.js"),
         "--port 5173",
         "--strictPort",
         $logPath
@@ -136,6 +136,12 @@ function Test-DemoCommandLineMarkers {
         }
 
         if ($CommandLine.IndexOf($marker, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            # Older frontend records launched npm.cmd. Accept their original
+            # launch marker only; instance, strict port and log markers still apply.
+            if ($marker -match '[\\/]frontend[\\/]node_modules[\\/]vite[\\/]bin[\\/]vite\.js$' -and
+                $CommandLine.IndexOf("run dev", [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                continue
+            }
             return $false
         }
     }

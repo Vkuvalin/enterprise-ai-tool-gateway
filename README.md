@@ -64,7 +64,7 @@ cd ..
 run_demo.cmd
 ```
 
-Runner запускает локальные backend и frontend, положительно проверяет Gateway frontend по project marker и API proxy, открывает dashboard и оставляет одно управляющее PowerShell window открытым. Уже готовые services переиспользуются без передачи ownership; `Q` останавливает только процессы, запущенные этим runner instance. Для explicit cleanup всех проверенных runner-owned instances используйте `scripts/demo/stop_demo.ps1`. Runner не устанавливает npm dependencies автоматически.
+Runner запускает backend и frontend, проверяет их готовность и открывает dashboard. Логи обоих сервисов видны в одном PowerShell-окне и сохраняются в `.runtime/logs/<instance-id>/`. Нажмите `Ctrl+C` для штатной остановки; закрытие окна также завершает все процессы, запущенные этим Runner. `Q` остаётся дополнительным способом остановки. Уже готовые services переиспользуются без передачи ownership. Для explicit cleanup старых проверенных instances используйте `scripts/demo/stop_demo.ps1`. Runner не устанавливает npm dependencies автоматически.
 
 Запустить backend из корня repository:
 

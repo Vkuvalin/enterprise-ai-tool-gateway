@@ -289,6 +289,9 @@ Local Windows demo entrypoints:
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `run_demo.cmd`                   | One-click Windows wrapper для `scripts/demo/run_demo.ps1`.                                                                                                 |
 | `scripts/demo/run_demo.ps1`      | Запускает или безопасно reuses backend/frontend, создаёт отдельный runner instance, проверяет frontend marker + proxied API health и открывает Dashboard. |
+| `scripts/demo/runner_processes.cs` | Windows Job Object ownership, atomic child creation, console cancellation and live console/file output. |
+| `scripts/demo/test_runner.ps1` | Local Windows lifecycle regression: Ctrl+C, abrupt/early termination, repeat, reuse, conflicts and partial startup. |
+| `scripts/demo/test_console_helper.cs` | Test-only hidden console, exact retained process handles and isolated Ctrl+C delivery. |
 | `scripts/demo/runner_common.ps1` | Общие helpers для immutable metadata, PID/start/command/tree ownership proof и fail-closed cleanup.                                                        |
 | `scripts/demo/stop_demo.ps1`     | Останавливает все и только verified runner-owned instance trees; legacy shared PID files и unverifiable records не являются kill authority.               |
 

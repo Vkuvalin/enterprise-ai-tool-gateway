@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 
 $BackendHost = "127.0.0.1"
 $BackendPort = 8000
@@ -28,6 +29,8 @@ $InstanceDir = Join-Path $InstancesDir $InstanceId
 $LogDir = Join-Path $RuntimeDir "logs\$InstanceId"
 $InstanceMetadataPath = Join-Path $InstanceDir "instance.json"
 $StartedProcesses = @()
+$ProcessGroup = $null
+$RunnerExitCode = 0
 
 function Write-Info {
     param([string]$Message)
@@ -70,21 +73,21 @@ function Resolve-ToolPath {
     throw "Required tool '$Name' was not found. Install it or add it to PATH."
 }
 
-function Resolve-NpmPath {
-    $npmCommand = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
-    if (-not $npmCommand) {
-        $npmCommand = Get-Command "npm" -ErrorAction SilentlyContinue
+function Resolve-NodePath {
+    $nodeCommand = Get-Command "node.exe" -ErrorAction SilentlyContinue
+    if (-not $nodeCommand) {
+        $nodeCommand = Get-Command "node" -ErrorAction SilentlyContinue
     }
-    if ($npmCommand) {
-        return $npmCommand.Source
+    if ($nodeCommand) {
+        return $nodeCommand.Source
     }
 
-    $fallback = "C:\Program Files\nodejs\npm.cmd"
+    $fallback = "C:\Program Files\nodejs\node.exe"
     if (Test-Path -LiteralPath $fallback) {
         return $fallback
     }
 
-    throw "Required tool 'npm' was not found in PATH or at '$fallback'."
+    throw "Required tool 'node' was not found in PATH or at '$fallback'."
 }
 
 function Test-TcpPort {
@@ -179,28 +182,19 @@ function Start-LoggedCommand {
         [string]$LogPath
     )
 
-    New-Item -ItemType File -Path $LogPath -Force | Out-Null
-
     $commandLine = (
-        'set "GATEWAY_DEMO_INSTANCE={0}" && {1} {2} 1>>{3} 2>>&1' -f
+        'set "GATEWAY_DEMO_INSTANCE={0}" && set "GATEWAY_DEMO_LOG={1}" && set "PYTHONUTF8=1" && set "PYTHONIOENCODING=utf-8" && {2} {3}' -f
         $InstanceId,
+        $LogPath,
         (Quote-CmdArgument $Executable),
-        (Join-CmdArguments $Arguments),
-        (Quote-CmdArgument $LogPath)
+        (Join-CmdArguments $Arguments)
     )
-    $processInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $processInfo.FileName = $env:ComSpec
-    $processInfo.Arguments = "/d /s /c ""$commandLine"""
-    $processInfo.WorkingDirectory = $WorkingDirectory
-    $processInfo.UseShellExecute = $false
-    $processInfo.CreateNoWindow = $true
-
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo = $processInfo
-    if (-not $process.Start()) {
-        throw "Failed to start $Name."
-    }
-    return $process
+    return $ProcessGroup.Start(
+        $env:ComSpec,
+        "/d /s /c ""$commandLine""",
+        $WorkingDirectory,
+        $LogPath
+    )
 }
 
 function New-OwnedProcessRecord {
@@ -275,6 +269,10 @@ function Wait-ForReady {
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
+        if ($ProcessGroup.StopRequested) {
+            throw [OperationCanceledException]::new("Demo startup cancelled.")
+        }
+
         if ($OwnedEntry -and -not (Test-OwnedProcessActive -Entry $OwnedEntry)) {
             throw "$Name exited or lost its runner identity before becoming ready. See log: $LogPath"
         }
@@ -325,6 +323,10 @@ function Stop-StartedProcesses {
 }
 
 try {
+    if (-not ("Gateway.Demo.DemoProcessGroup" -as [type])) {
+        Add-Type -Path (Join-Path $PSScriptRoot "runner_processes.cs")
+    }
+    $ProcessGroup = [Gateway.Demo.DemoProcessGroup]::new()
     Write-Info "Repository root: $RepoRoot"
     Write-Info "Runner instance: $InstanceId"
     New-Item -ItemType Directory -Path $InstancesDir -Force | Out-Null
@@ -341,7 +343,7 @@ try {
     Write-DemoJsonAtomically -Path $InstanceMetadataPath -Value $instanceRecord
 
     $uvPath = Resolve-ToolPath -Name "uv"
-    $npmPath = Resolve-NpmPath
+    $nodePath = Resolve-NodePath
 
     foreach ($relativePath in @(
         "pyproject.toml",
@@ -396,8 +398,8 @@ try {
         throw "Port $FrontendPort is occupied by a service that is not the Gateway frontend. Stop the conflicting process and run the demo again."
     }
     else {
-        $vitePackagePath = Join-Path $RepoRoot "frontend\node_modules\vite\package.json"
-        if (-not (Test-Path -LiteralPath $vitePackagePath)) {
+        $viteCliPath = Join-Path $RepoRoot "frontend\node_modules\vite\bin\vite.js"
+        if (-not (Test-Path -LiteralPath $viteCliPath)) {
             throw "Frontend dependencies are missing. Run 'cd frontend' and 'npm install' once, then run the demo again."
         }
 
@@ -405,8 +407,8 @@ try {
         Write-Info "Starting frontend on $FrontendHost`:$FrontendPort."
         $frontendProcess = Start-LoggedCommand `
             -Name "frontend" `
-            -Executable $npmPath `
-            -Arguments @("run", "dev", "--", "--host", $FrontendHost, "--port", "$FrontendPort", "--strictPort") `
+            -Executable $nodePath `
+            -Arguments @($viteCliPath, "--host", $FrontendHost, "--port", "$FrontendPort", "--strictPort") `
             -WorkingDirectory (Join-Path $RepoRoot "frontend") `
             -LogPath $frontendLog
         $frontendRecord = New-OwnedProcessRecord -Service "frontend" -Process $frontendProcess -LogPath $frontendLog
@@ -442,41 +444,58 @@ try {
     Write-Host "Instance logs : $LogDir"
     Write-Host ""
 
-    if ($backendStarted -or $frontendStarted) {
-        $exitMessage = "stop processes started by this runner instance and exit"
-    }
-    else {
-        $exitMessage = "exit; reused services will not be stopped"
-    }
+    Write-Host "The application is ready."
+    Write-Host "Close this window or press Ctrl+C to stop services started by this runner."
+    Write-Host "Q also stops this runner. Reused services retain their existing ownership."
 
-    if ($NoBrowser) {
-        while ($true) {
-            $answer = Read-Host "Enter Q to $exitMessage"
-            if ([string]::Equals($answer.Trim(), "q", [System.StringComparison]::OrdinalIgnoreCase)) {
+    while (-not $ProcessGroup.StopRequested) {
+        if (-not [Console]::IsInputRedirected -and [Console]::KeyAvailable) {
+            if ([Console]::ReadKey($true).Key -eq [ConsoleKey]::Q) {
                 break
             }
         }
-    }
-    else {
-        Write-Host "Press Q to $exitMessage."
-        while ($true) {
-            $key = [Console]::ReadKey($true)
-            if ($key.Key -eq [ConsoleKey]::Q) {
-                break
+        foreach ($entry in $StartedProcesses) {
+            if (-not (Test-OwnedProcessActive -Entry $entry)) {
+                throw "$($entry.Record.service) stopped unexpectedly. See $($entry.Record.log_path)"
             }
         }
+        Start-Sleep -Milliseconds 200
     }
-
-    Stop-StartedProcesses
-    Write-Info "Demo runner exited."
-    exit 0
 }
 catch {
-    Write-Host ""
-    Write-Host "Demo runner failed: $($_.Exception.Message)" -ForegroundColor Red
-    if ($StartedProcesses.Count -gt 0) {
-        Write-Info "Cleaning up processes started during this failed launch."
+    if ($ProcessGroup -and $ProcessGroup.StopRequested) {
+        Write-Info "Demo startup cancelled."
     }
-    Stop-StartedProcesses
-    exit 1
+    else {
+        Write-Host ""
+        Write-Host "Demo runner failed: $($_.Exception.Message)" -ForegroundColor Red
+        $RunnerExitCode = 1
+    }
 }
+finally {
+    # The job owns descendants even when metadata was not published yet.
+    if ($ProcessGroup) {
+        try {
+            if ($ProcessGroup.StopRequested) {
+                Write-Info "Stopping demo; waiting for server shutdown."
+                if (-not $ProcessGroup.WaitForExit(8000)) {
+                    Write-WarningLine "Some owned processes did not stop in time; terminating the remaining process tree."
+                }
+            }
+            $ProcessGroup.Dispose()
+        }
+        catch {
+            Write-WarningLine "Process cleanup or log drain failed: $($_.Exception.Message)"
+            $RunnerExitCode = 1
+        }
+    }
+    try {
+        Stop-StartedProcesses
+    }
+    catch {
+        Write-WarningLine "Instance metadata cleanup failed: $($_.Exception.Message)"
+        $RunnerExitCode = 1
+    }
+}
+Write-Info "Demo runner exited."
+exit $RunnerExitCode

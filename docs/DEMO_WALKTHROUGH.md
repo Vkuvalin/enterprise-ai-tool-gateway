@@ -78,7 +78,7 @@ cd ..
 run_demo.cmd
 ```
 
-Runner не устанавливает dependencies автоматически. Он запускает оба локальных сервиса, ожидает backend health, положительно проверяет frontend по project marker и proxied API health, затем открывает dashboard. Уже готовые services переиспользуются без ownership; `Q` останавливает только процессы текущего runner instance. Используйте manual commands ниже как fallback path или когда удобнее работать в отдельных терминалах.
+Runner не устанавливает dependencies автоматически. Он запускает оба локальных сервиса, ожидает backend health, проверяет frontend marker и API proxy, затем открывает dashboard. Backend/frontend logs видны в одном окне и сохраняются в per-instance files. `Ctrl+C` запускает штатную остановку; закрытие окна завершает всё дерево процессов этого Runner. `Q` — дополнительный способ остановки. Уже готовые services переиспользуются без ownership. Используйте manual commands ниже, когда удобнее работать в отдельных терминалах.
 
 ## 3. Запуск backend
 
@@ -368,7 +368,7 @@ Runner сообщает conflict на порту 5173:
 
 Runner cleanup и logs:
 
-Per-instance metadata находится в `.runtime/instances/<instance-id>/`, а logs — в `.runtime/logs/<instance-id>/`. `Q` останавливает только services, запущенные текущим window. Чтобы остановить все verified runner-owned instances, выполните `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1`; unverifiable processes/records остаются нетронутыми для безопасной диагностики.
+Per-instance metadata находится в `.runtime/instances/<instance-id>/`, а logs — в `.runtime/logs/<instance-id>/`. `Ctrl+C`, закрытие окна и `Q` останавливают services текущего Runner; переиспользованные services сохраняют своего владельца. Для cleanup старых verified instances выполните `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1`; unverifiable records остаются нетронутыми для диагностики.
 
 `npm` отсутствует в PATH на Windows:
 
