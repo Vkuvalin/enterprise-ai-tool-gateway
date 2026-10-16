@@ -22,7 +22,7 @@ Enterprise AI Tool Gateway — это локальный/demo-прототип �
 
 <img width="3836" height="2047" alt="Workflow submit" src="https://github.com/user-attachments/assets/bab384b7-f723-4c09-b19c-45efa40d5c54" />
 
-<img width="3835" height="2046" alt="Manual review" src="[https://github.com/user-attachments/assets/2349e6b5-0ac2-40c7-9b06-1e4f6912b244](https://github.com/user-attachments/assets/2349e6b5-0ac2-40c7-9b06-1e4f6912b244)" />
+<img width="3835" height="2046" alt="Manual review" src="https://github.com/user-attachments/assets/2349e6b5-0ac2-40c7-9b06-1e4f6912b244" />
 
 
 
