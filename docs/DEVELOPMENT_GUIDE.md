@@ -2,36 +2,34 @@
 
 ## 1. Назначение
 
-Это руководство объясняет, как разрабатывать, валидировать и безопасно изменять замороженный локальный прототип. Это практический checklist для запуска backend, запуска frontend, выполнения детерминированных evals, сбора review diffs и сохранения границ проекта, которые делают gateway безопасным для инспекции.
+Руководство объясняет, как разрабатывать, проверять и безопасно изменять замороженный локальный прототип. Здесь описаны запуск сервера и веб-интерфейса, детерминированные приёмочные проверки, подготовка файлов различий для проверки изменений и сохранение принятых границ проекта.
 
-Прототип является local/demo software. Он демонстрирует backend-controlled выполнение инструментов, предложенных LLM, для синтетических workflows access, procurement и maintenance. Это не руководство по production deployment.
+Это локальный демонстрационный прототип. Он показывает, как сервер контролирует выполнение предложенных LLM инструментов в синтетических сценариях доступа, закупок и обслуживания. Руководство не описывает промышленное развёртывание.
 
-## 2. Prerequisites
+## 2. Требования к окружению
 
-Необходимые локальные tools:
+Нужны следующие локальные инструменты и файлы:
 
-* Python, совместимый с требованием проекта в `pyproject.toml`. Текущее требование проекта — Python `>=3.14`.
-* `uv` для управления Python dependencies и выполнения команд.
-* Node.js и npm для React/Vite frontend.
-* Локальная checkout-копия этого repository.
+* Python, совместимый с требованием в `pyproject.toml`. Текущее требование проекта — Python `>=3.14`.
+* `uv` для управления зависимостями Python и выполнения команд.
+* Node.js и npm для веб-интерфейса на React/Vite.
+* Локальная рабочая копия репозитория.
 
-Default validation и demo runs не требуют real provider credentials. Default provider path — это deterministic mock/fake provider behavior, а default tests/evals не должны вызывать real providers или external enterprise systems.
+Стандартные проверки и демонстрационные запуски не требуют ключей реальных поставщиков моделей. По умолчанию используются детерминированные заглушки; стандартные тесты и приёмочные проверки не обращаются к реальным поставщикам моделей или внешним корпоративным системам.
 
-Windows notes:
+Особенности Windows:
 
-* Запускайте команды из корня repository, если раздел явно не требует использовать `frontend/`.
-* После clean checkout один раз выполните `cd frontend`, `npm install`, `cd ..`; runner не устанавливает dependencies автоматически.
-* Для самого быстрого local demo start запустите `run_demo.cmd` из корня repository. Он запускает backend и frontend, пишет per-instance logs и открывает `http://127.0.0.1:5173/dashboard`.
-* Если `npm` установлен, но отсутствует в `PATH`, используйте полный путь к npm executable:
+* Выполняйте команды из корня репозитория, если раздел явно не требует перехода в `frontend/`.
+* После получения чистой рабочей копии один раз выполните `cd frontend`, `npm install`, `cd ..`: программа запуска не устанавливает зависимости автоматически.
+* Для быстрого запуска локальной демонстрации откройте `run_demo.cmd` из корня репозитория. Он запускает сервер и веб-интерфейс, пишет журналы отдельного экземпляра и открывает `http://127.0.0.1:5173/dashboard`.
+* Если `npm` установлен, но отсутствует в `PATH`, используйте полный путь:
   `C:\Program Files\nodejs\npm.cmd`.
 
-### Windows demo runner
+### Программа запуска демонстрации для Windows
 
-`run_demo.cmd` — это локальный convenience wrapper вокруг
-`scripts/demo/run_demo.ps1`. Он запускает FastAPI backend на
-`127.0.0.1:8000` и Vite frontend на `127.0.0.1:5173` только если эти services ещё не готовы. Backend reuse требует HTTP 200 и `status: "ok"`; frontend reuse дополнительно требует exact project marker `/gateway-demo-marker.txt` и working same-origin `/api/v1/health` proxy. Новый Vite запускается с `--strictPort`, поэтому чужой server на 5173 не маскируется переходом на другой port.
+`run_demo.cmd` — локальная оболочка для `scripts/demo/run_demo.ps1`. Она запускает сервер FastAPI на `127.0.0.1:8000` и веб-интерфейс Vite на `127.0.0.1:5173`, только если эти сервисы ещё не готовы. Для использования уже работающего сервера нужны HTTP 200 и `status: "ok"`. Для веб-интерфейса дополнительно проверяются точный маркер проекта `/gateway-demo-marker.txt` и работающий прокси `/api/v1/health` на том же адресе. Новый Vite запускается с `--strictPort`, поэтому чужой сервер на 5173 не маскируется автоматическим переходом на другой порт.
 
-Runtime files являются локальными artifacts в `.runtime/`:
+Служебные файлы запуска хранятся локально в `.runtime/`:
 
 ```text
 .runtime/instances/<instance-id>/instance.json
@@ -41,75 +39,75 @@ Runtime files являются локальными artifacts в `.runtime/`:
 .runtime/logs/<instance-id>/frontend.log
 ```
 
-Frontend Runner запускает Vite CLI напрямую через `node.exe`, без `npm.cmd`, чтобы `Ctrl+C` не оставлял внутренний batch-запрос `Y/N`. Вывод консоли и дочернего Python использует UTF-8; per-instance logs сохраняются в UTF-8.
+Программа запуска вызывает Vite CLI напрямую через `node.exe`, без `npm.cmd`, чтобы после `Ctrl+C` не оставался внутренний запрос пакетного файла `Y/N`. Консоль и дочерний Python используют UTF-8; журналы каждого экземпляра также сохраняются в UTF-8.
 
-Service records создаются только для processes, фактически запущенных этим Runner. Они связывают instance/service, PID, process start identity, repository root и exact log path; reused services не становятся owned. `runner_processes.cs` создаёт новый process сразу внутри Windows Job Object (Windows 10/11), затем снимает его с suspension; потомки наследуют job, а его handle остаётся только у Runner. Закрытие окна или аварийное завершение Runner освобождает handle и завершает owned tree. Вывод backend/frontend одновременно виден в консоли и сохраняется в per-instance logs.
+Записи сервисов создаются только для процессов, которые действительно запустил этот экземпляр программы. Запись связывает экземпляр и сервис, PID, время создания процесса, корень репозитория и точный путь журнала. Использование уже работающего сервиса не передаёт владение им. `runner_processes.cs` создаёт новый процесс сразу внутри Windows Job Object (Windows 10/11) и затем возобновляет его выполнение. Дочерние процессы наследуют принадлежность к этому объекту, а его дескриптор остаётся только у программы запуска. Закрытие окна или аварийное завершение программы освобождает дескриптор и завершает принадлежащее ей дерево процессов. Вывод сервера и веб-интерфейса одновременно виден в консоли и сохраняется в журналах экземпляра.
 
-Нажмите `Ctrl+C` в PowerShell-окне для штатной остановки: Runner ждёт до восьми секунд и завершает оставшиеся owned processes. Закрытие окна также останавливает owned tree; `Q` остаётся дополнительным способом остановки. Reused services сохраняют своего владельца. Чтобы остановить старые verified runner-owned instances, выполните:
+Для штатной остановки нажмите `Ctrl+C` в окне PowerShell: программа ждёт до восьми секунд и завершает оставшиеся принадлежащие ей процессы. Закрытие окна также останавливает её дерево процессов; `Q` остаётся дополнительным способом остановки. Уже работавшие сервисы сохраняют прежнего владельца. Чтобы остановить старые экземпляры, владение процессами которых подтверждено, выполните:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1
 ```
 
-Stop script перечисляет только per-instance records, удаляет safely stale dead records и не выводит ownership из port, process name или PID alone. Invalid/unverifiable records остаются нетронутыми, а script возвращает non-zero exit. Legacy shared `.runtime/demo-*.pid` намеренно игнорируются. Logs могут остаться после cleanup для диагностики.
+Скрипт остановки читает только записи отдельных экземпляров, безопасно удаляет устаревшие записи уже завершившихся процессов и не считает порт, имя процесса или один PID доказательством владения. Неверные и непроверяемые записи остаются нетронутыми, а скрипт возвращает ненулевой код завершения. Старые общие файлы `.runtime/demo-*.pid` намеренно игнорируются. Журналы могут оставаться после очистки для диагностики.
 
-Проверка Runner lifecycle на Windows (localhost, mock provider, isolated SQLite; порты 8000 и 5173 должны быть свободны):
+Проверка жизненного цикла программы запуска в Windows использует локальный адрес, заглушку поставщика модели и изолированную SQLite. Порты 8000 и 5173 должны быть свободны:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/test_runner.ps1
 ```
 
-Harness проверяет `Ctrl+C`, аварийное завершение своего Runner, повторные запуски, reuse, остановку во время старта, чужой занятый порт и ошибку частичного старта. Логи и test data находятся в `.runtime/test_runner/`; неизвестные процессы не останавливаются.
+Проверяются `Ctrl+C`, аварийное завершение собственного экземпляра, повторные запуски, использование уже готовых сервисов, остановка во время старта, чужой занятый порт и ошибка частичного запуска. Журналы и тестовые данные находятся в `.runtime/test_runner/`; неизвестные процессы не останавливаются.
 
-## 3. Backend setup and run
+## 3. Подготовка и запуск сервера
 
-Из корня repository запустите FastAPI backend:
+Из корня репозитория запустите FastAPI:
 
 ```bash
 uv run uvicorn enterprise_ai_tool_gateway.api.http.app:app --reload
 ```
 
-API версионирован под `/api/v1`. Используйте эти health checks:
+Версионированный API доступен под `/api/v1`. Используйте адреса проверки работоспособности и возможностей:
 
 ```text
 http://127.0.0.1:8000/api/v1/health
 http://127.0.0.1:8000/api/v1/capabilities
 ```
 
-Backend root может возвращать 404:
+Корневой адрес сервера может возвращать 404:
 
 ```text
 http://127.0.0.1:8000/
 ```
 
-Это нормально. Backend обслуживает API, а не frontend root page.
+Это ожидаемо: сервер обслуживает API, а не главную страницу веб-интерфейса.
 
-По умолчанию local app создаёт SQLite database в `data/`. Local database files являются runtime artifacts и не должны коммититься.
+По умолчанию локальное приложение создаёт базу SQLite в `data/`. Файлы локальных баз данных создаются во время работы и не должны попадать в коммиты.
 
-## 4. Frontend setup and run
+## 4. Подготовка и запуск веб-интерфейса
 
-Перед первым frontend start после clean checkout установите dependencies:
+Перед первым запуском в чистой рабочей копии установите зависимости:
 
 ```bash
 cd frontend
 npm install
 ```
 
-Запустите Vite dev server на документированном local address:
+Запустите сервер разработки Vite по документированному локальному адресу:
 
 ```bash
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Откройте основной UI:
+Откройте веб-интерфейс:
 
 ```text
 http://127.0.0.1:5173/dashboard
 ```
 
-Frontend API client по умолчанию использует `/api/v1`. Vite dev server проксирует `/api` на `http://localhost:8000`, поэтому backend должен быть запущен на порту 8000 перед использованием UI.
+Клиент API по умолчанию использует `/api/v1`. Сервер разработки Vite проксирует `/api` на `http://localhost:8000`, поэтому перед использованием интерфейса серверная часть должна работать на порту 8000.
 
-Windows npm fallback:
+Если npm не найден в Windows, используйте:
 
 ```text
 C:\Program Files\nodejs\npm.cmd
@@ -122,9 +120,9 @@ cd frontend
 & "C:\Program Files\nodejs\npm.cmd" run dev -- --host 127.0.0.1 --port 5173
 ```
 
-## 5. Backend validation
+## 5. Проверки серверной части
 
-Запустите routine backend validation из корня repository:
+Выполните стандартные проверки из корня репозитория:
 
 ```bash
 uv run pytest
@@ -133,26 +131,26 @@ uv run pyright
 git diff --check
 ```
 
-Точное количество tests может меняться по мере развития прототипа, поэтому не hardcode expected count в docs или task handoffs, если repository не устанавливает конкретную convention для текущего момента.
+Количество тестов может меняться по мере развития прототипа. Не фиксируйте ожидаемое число в документации и передаче результатов, если для текущего состояния репозитория не установлено отдельное правило.
 
-Default backend validation должна оставаться deterministic и offline. Она не должна требовать real provider credentials, network access или real enterprise systems.
+Стандартные серверные проверки должны оставаться детерминированными и автономными. Им не нужны ключи реальных поставщиков моделей, доступ к сети или реальные корпоративные системы.
 
-## 6. Eval validation
+## 6. Приёмочные проверки API
 
-Запустите deterministic API acceptance evals:
+Запустите детерминированные приёмочные проверки:
 
 ```bash
 uv run python scripts/run_eval.py
 uv run python scripts/run_eval.py --format json
 ```
 
-Eval runner проверяет public API surface `/api/v1` с deterministic providers и isolated local SQLite state. Это acceptance validation для gateway lifecycle: controlled statuses, approval gating, readback endpoints, audit events, reason codes и failed-validation handling.
+Они проверяют публичный API `/api/v1` с детерминированными поставщиками моделей и изолированным локальным состоянием SQLite. Проверяется жизненный цикл шлюза: контролируемые статусы, запрет выполнения до согласования, чтение результатов, события аудита, коды причин и обработка ошибок проверки данных.
 
-Evals используют default mock/static provider path. Они не выполняют real provider calls, external network calls и real connector calls.
+Используются стандартные заглушки и фиксированные решения поставщиков. Обращений к реальным моделям, внешней сети и реальным корпоративным интеграциям нет.
 
-## 7. Frontend validation
+## 7. Проверки веб-интерфейса
 
-Запустите frontend validation из `frontend/`:
+Из корня репозитория выполните:
 
 ```bash
 cd frontend
@@ -160,51 +158,51 @@ npm run typecheck
 npm run build
 ```
 
-В текущем прототипе нет full frontend E2E harness. Перед принятием demo-facing frontend changes выполните manual browser smoke по основным routes и workflows.
+В текущем прототипе нет полноценного набора сквозных тестов веб-интерфейса. Перед принятием изменений, затрагивающих демонстрацию, вручную проверьте в браузере основные маршруты и сценарии.
 
-## 8. Manual smoke checklist
+## 8. Чеклист ручной проверки
 
-При запущенных backend и frontend проверьте основные routes:
+При работающих сервере и веб-интерфейсе откройте основные маршруты:
 
 * `/dashboard`
 * `/workflows`
 * `/runs`
 * `/settings`
 
-Затем пройдите основные workflow paths:
+Затем пройдите основные сценарии:
 
-* Access submit с документированными known-good access values.
-* Procurement approval path, включая pending approval и approval resolution.
-* Maintenance default/safe path с known-good low-severity values.
+* Отправка заявки на доступ с документированными проверенными значениями.
+* Закупка с согласованием: ожидание решения и его обработка.
+* Стандартный безопасный сценарий обслуживания с проверенными значениями низкой серьёзности проблемы.
 
-Для созданного run проверьте:
+Для созданного запуска проверьте:
 
 * `/runs/{run_id}`
 * `/runs/{run_id}/approvals`
 * `/runs/{run_id}/tool-calls`
 * `/runs/{run_id}/audit`
 
-Smoke expectations:
+Ожидаемый результат:
 
-* нет blank screen;
-* fresh browser session использует RU, а `RU → EN → RU` работает без reload и без reset текущих forms/run/approval state;
-* API status healthy;
-* provider mode — `mock`;
-* model selection disabled;
-* controlled statuses безопасно отображаются, включая `COMPLETED`,
+* пустого экрана нет;
+* при отсутствии сохранённого языка интерфейс использует RU, а переключение `RU → EN → RU` работает без перезагрузки и сброса текущих форм, запуска или согласования;
+* API работает;
+* режим поставщика модели — `mock`;
+* выбор модели отключён;
+* контролируемые статусы корректно отображаются, включая `COMPLETED`,
   `WAITING_FOR_APPROVAL`, `NEEDS_USER_INPUT`, `NEEDS_MANUAL_REVIEW`,
   `REJECTED`, `FAILED_VALIDATION`, `FAILED_TOOL` и `FAILED_PROVIDER`;
-* approval-required workflows не показывают completed draft до approval;
-* aggregate partial/unavailable/failed reads не выглядят как authoritative empty/current data;
-* run/approval data, controls, drafts и async feedback принадлежат текущему route ID;
-* raw JSON, UUIDs, JSON/request keys, canonical enum/status values и backend-provided text не меняются при locale switch;
-* run-scoped tool calls и audit records видимы.
+* сценарий с обязательным согласованием не показывает готовый черновик до разрешения;
+* частично доступные, недоступные или ошибочные сводные чтения не выдаются за достоверные пустые или актуальные данные;
+* данные запуска и согласования, элементы управления, черновики и асинхронные сообщения относятся к текущему идентификатору маршрута;
+* исходный JSON, UUID, ключи JSON и запросов, канонические значения перечислений и статусов, а также текст сервера не меняются при переключении языка;
+* вызовы инструментов и записи аудита запуска видны.
 
-## 9. Diff and review workflow
+## 9. Подготовка различий и проверка изменений
 
-Для review loops используйте staged-baseline workflow, когда это помогает отделить уже принятые changes от последующих fix-loop edits. Не делайте commit во время этого workflow, если task явно не просит commit.
+При повторных проверках изменений можно использовать подготовленную в индексе Git исходную версию: она отделяет уже принятые изменения от последующих исправлений. Не создавайте коммит в рамках этого порядка, если задача явно этого не требует.
 
-Перед fix-loop добавьте accepted baseline в staged без commit:
+Перед исправлениями добавьте принятые файлы в индекс без коммита:
 
 ```powershell
 git status --short --untracked-files=all
@@ -212,105 +210,103 @@ git add <accepted-files>
 git -c core.quotepath=false diff --cached --output=accepted-baseline.diff
 ```
 
-После fix-loop edits соберите unstaged delta:
+После исправлений соберите различия, ещё не добавленные в индекс:
 
 ```powershell
 git -c core.quotepath=false diff --output=fix-loop-delta.diff
 git diff --check
 ```
 
-Проверьте delta. Если fix-loop changes приняты, намеренно обновите staged baseline:
+Проверьте их. Если исправления приняты, явно обновите подготовленную версию:
 
 ```powershell
 git add <accepted-fix-files>
 git -c core.quotepath=false diff --cached --output=accepted-baseline.diff
 ```
 
-Предпочитайте `git diff --output=...` вместо PowerShell `Out-File` для patch/diff files. Это позволяет избежать случайных encoding changes, из-за которых review artifacts сложнее apply или compare.
+Для файлов различий и патчей используйте `git diff --output=...` вместо PowerShell `Out-File`. Это помогает избежать случайной смены кодировки, мешающей применению и сравнению материалов проверки.
 
-Держите review diffs сфокусированными. Не смешивайте unrelated cleanup, generated output, local cache changes или unrelated documentation edits в одном review set.
+Держите набор проверяемых изменений узким. Не смешивайте несвязанную уборку, сгенерированные файлы, изменения локального кэша или постороннюю редактуру документации.
 
-## 10. Repo hygiene
+## 10. Чистота репозитория
 
-Не коммитьте local dependency, build, cache, secret или review artifacts:
+Не коммитьте локальные зависимости, результаты сборки, кэши, секреты или материалы проверки изменений:
 
 * `frontend/node_modules/`
 * `frontend/dist/`
 * `frontend/.vite/`
-* `.env` или secret-bearing files
-* local SQLite databases, `.runtime/` metadata/logs и runtime data
-* temporary task/report/plan/diff artifacts в `docs/codex/` или других ignored working directories
+* `.env` и другие файлы с секретами
+* локальные базы SQLite, метаданные и журналы `.runtime/`, рабочие данные приложения
+* временные задания, отчёты, планы и файлы различий в `docs/codex/` или других игнорируемых рабочих каталогах
 
-Держите generated reports и diffs вне final commits, если task явно не требует committed artifact. Перед commit любых изменений проверьте:
+Сгенерированные отчёты и файлы различий не должны попадать в итоговые коммиты, если задача явно этого не требует. Перед любым коммитом проверьте:
 
 ```bash
 git status --short --untracked-files=all
 git diff --check
 ```
 
-## 11. Boundary rules for changes
+## 11. Границы изменений
 
-Сохраняйте эти boundaries при изменении прототипа:
+При изменении прототипа сохраняйте следующие правила:
 
-* Frontend code должен обращаться к backend только через `/api/v1`.
-* Frontend code не должен импортировать backend Python internals.
-* API routes должны оставаться thin adapters поверх application runtimes.
-* Application runtimes владеют orchestration, workflow decisions и approval resolution behavior.
-* Backend владеет provider-output validation, tool execution, policy checks,
-  approval gates, audit creation и persistence coordination.
-* Provider output считается недоверенным, пока backend schema и runtime validation не примут его.
-* Tool execution должно проходить через `ToolRegistry` / `ToolExecutor` или explicit MCP/MCP-like boundary.
-* Unknown, disallowed или unregistered tool proposals должны завершаться validation failure.
-* State-changing tools требуют policy checks.
-* Risky или approval-required state-changing tools требуют approval перед draft execution.
-* Public API responses должны использовать safe projection/redaction для tool payloads,
-  approval free-text fields и audit payloads.
-* Default tests и evals не должны выполнять real provider или external network calls.
+* Веб-интерфейс обращается к серверу только через `/api/v1`.
+* Веб-интерфейс не импортирует внутренние серверные модули Python.
+* Маршруты API остаются тонкими адаптерами над прикладным слоем.
+* Прикладной слой координирует исполнение, принимает решения по сценарию и обрабатывает решения по согласованиям.
+* Сервер отвечает за проверку ответов поставщика модели, выполнение инструментов, проверки политики, обязательное согласование, создание событий аудита и координацию хранения.
+* Ответ поставщика модели считается недоверенным до проверки серверной схемы и смысловой проверки в прикладном слое.
+* Инструменты выполняются через `ToolRegistry` / `ToolExecutor` или явно предусмотренный интерфейс MCP либо аналогичный ему.
+* Предложения неизвестных, недопустимых или незарегистрированных инструментов отклоняются при проверке.
+* Изменяющие состояние инструменты требуют проверки политики.
+* Инструменты с риском или обязательным согласованием требуют разрешения до создания черновика.
+* Публичные ответы API используют безопасные проекции и маскирование данных инструментов, свободных текстовых полей согласований и событий аудита.
+* Стандартные тесты и приёмочные проверки не обращаются к реальным поставщикам моделей или внешней сети.
 
-## 12. Common troubleshooting
+## 12. Частые проблемы
 
 `npm` отсутствует в `PATH`:
 
-Используйте полный путь к Windows executable:
+Используйте полный путь к исполняемому файлу Windows:
 
 ```text
 C:\Program Files\nodejs\npm.cmd
 ```
 
-Backend root `/` возвращает 404:
+Корневой маршрут сервера `/` возвращает 404:
 
-Используйте `/api/v1/health`, `/api/v1/capabilities` или frontend dashboard. 404 от `/` — это нормально.
+Используйте `/api/v1/health`, `/api/v1/capabilities` или страницу обзора веб-интерфейса. Ответ 404 от `/` ожидаем.
 
-Frontend не может достучаться до API:
+Веб-интерфейс не может обратиться к API:
 
-Убедитесь, что backend запущен на порту 8000. Frontend вызывает `/api/v1`, а Vite проксирует `/api` на `http://localhost:8000`.
+Убедитесь, что сервер работает на порту 8000. Веб-интерфейс вызывает `/api/v1`, а Vite проксирует `/api` на `http://localhost:8000`.
 
-Vite port conflict:
+Конфликт порта Vite:
 
-Используйте документированный explicit port:
+Укажите документированный порт явно:
 
 ```bash
 cd frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Demo runner требует именно 5173 и положительно проверяет exact marker `enterprise-ai-tool-gateway:frontend:v1` вместе с proxied `/api/v1/health`. Arbitrary HTTP response, redirect, wrong marker или broken proxy считаются conflict; runner не останавливает такой process. Для manual development можно выбрать другой local port и открыть URL, который напечатает Vite.
+Программа запуска демонстрации требует именно 5173 и проверяет точный маркер `enterprise-ai-tool-gateway:frontend:v1` вместе с `/api/v1/health` через прокси. Произвольный HTTP-ответ, перенаправление, неверный маркер или неработающий прокси считаются конфликтом; такой процесс не останавливается. При ручной разработке можно выбрать другой локальный порт и открыть адрес, который напечатает Vite.
 
-CRLF/LF Git warnings:
+Предупреждения Git о CRLF/LF:
 
-Проверьте diff перед commit. Line-ending warnings обычно связаны с local Git configuration, но final diff должен оставаться readable и не должен включать unrelated whole-file churn.
+Проверьте различия перед коммитом. Такие предупреждения обычно связаны с локальными настройками Git, но итоговые изменения должны оставаться читаемыми и не включать несвязанную замену окончаний строк во всём файле.
 
-Maintenance возвращает `FAILED_TOOL` для arbitrary non-default input:
+Сценарий обслуживания возвращает `FAILED_TOOL` для произвольных нестандартных входных данных:
 
-Считайте это controlled backend failure state. Используйте documented known-good maintenance values для default/safe smoke path, затем проверьте run detail, tool calls и audit trail.
+Это контролируемое состояние ошибки сервера. Для стандартной безопасной проверки используйте документированные проверенные значения, затем изучите сведения о запуске, вызовы инструментов и журнал аудита.
 
-FastAPI или Starlette `TestClient` warning:
+Предупреждение FastAPI или Starlette о `TestClient`:
 
-Если pytest выводит `TestClient` warning, но tests всё ещё проходят, зафиксируйте это в handoff как dependency/tooling warning. Не считайте это real-provider или connector failure и не маскируйте failing tests.
+Если pytest выводит предупреждение о `TestClient`, но тесты проходят, укажите его при передаче результата как предупреждение зависимости или инструментария. Не считайте его сбоем реального поставщика модели или корпоративной интеграции и не скрывайте упавшие тесты.
 
-## 13. Related documents
+## 13. Связанные документы
 
-Related source-of-truth and companion documents:
+Основные и сопутствующие документы проекта:
 
 * [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md)
 * [ARCHITECTURE.md](ARCHITECTURE.md)
@@ -319,4 +315,4 @@ Related source-of-truth and companion documents:
 * [DEMO_WALKTHROUGH.md](DEMO_WALKTHROUGH.md)
 * [README.md](../README.md)
 
-`README.md` — это public quickstart. Если он будет переписан позже, держите его commands согласованными с этим guide и текущими repository entrypoints.
+`README.md` содержит публичное краткое руководство. При его изменении сохраняйте согласованность команд с этим руководством и действующими точками входа репозитория.

@@ -1,173 +1,173 @@
-# Политика LLM Provider
+# Политика поставщиков LLM
 
 ## 1. Назначение
 
-Этот документ определяет текущую политику provider, model, structured-output, tool-calling и safety для `enterprise-ai-tool-gateway`.
+Этот документ определяет текущие правила работы с поставщиками LLM и моделями, структурированными ответами, вызовами инструментов и защитными механизмами проекта `enterprise-ai-tool-gateway`.
 
-Это source-of-truth документ проекта для provider-related development decisions.
+Он является источником истины для решений о разработке интеграций с поставщиками LLM.
 
-Это не API reference и не provider comparison report.
+Это не справочник API и не отчёт о сравнении поставщиков.
 
-Текущий статус: Stage 6 provider и MCP boundary hardening реализованы для MVP use. Реализация остаётся практичной и ограниченной, а не production provider platform.
+Текущий статус: на этапе 6 реализовано усиление границ поставщиков LLM и MCP для минимальной версии (MVP). Реализация остаётся практичной и ограниченной; промышленная платформа поставщиков не создавалась.
 
-Stage 6 усиливает optional/manual использование GigaChat, deterministic structured-output validation, safe provider errors и локальную fake MCP external boundary, при этом default tests остаются deterministic и offline.
-
----
-
-## 2. Provider Strategy
-
-Принятая provider strategy:
-
-| Provider      | Status                | Purpose                                                               |
-| ------------- | --------------------- | --------------------------------------------------------------------- |
-| Mock provider | required              | Deterministic local tests, evals и development baseline.              |
-| GigaChat      | primary real provider | Основной real provider для MVP.                                       |
-| YandexGPT     | stretch / spike       | Вторичный provider, если интеграция возможна без нарушения MVP scope. |
-
-MVP acceptance требует:
-
-* deterministic mock provider;
-* GigaChat adapter или чётко ограниченный GigaChat integration path;
-* manual real-provider smoke path;
-* отсутствия real provider calls в default tests.
-
-YandexGPT не требуется для MVP acceptance, если позже явно не будет переведён из stretch в required scope.
+Этап 6 усиливает отдельный ручной путь GigaChat, детерминированную валидацию структурированных ответов, безопасную обработку ошибок поставщиков и локальную имитацию внешнего интерфейса MCP. Стандартные тесты при этом остаются детерминированными и работают без внешней сети.
 
 ---
 
-## 3. Provider Selection Rationale
+## 2. Стратегия поставщиков
 
-Проект ориентирован на российский enterprise context.
+Принятая стратегия:
 
-MVP должен продемонстрировать практическую способность работать напрямую как минимум с одним отечественным LLM provider.
+| Поставщик | Статус | Назначение |
+| --------- | ------ | ---------- |
+| Заглушка | Обязательна | Основа детерминированных локальных тестов, приёмочных проверок и разработки. |
+| GigaChat | Основной реальный поставщик | Основной реальный поставщик LLM для MVP. |
+| YandexGPT | Дополнительное исследовательское направление | Второй поставщик, если интеграция возможна без расширения объёма MVP. |
 
-GigaChat выбран как primary real provider для первой MVP-реализации.
+Для приёмки MVP требуются:
 
-YandexGPT остаётся planned spike/stretch provider, чтобы проверить, насколько легко architecture может поддержать вторую отечественную model.
+* детерминированная заглушка поставщика;
+* адаптер GigaChat или чётко ограниченный путь интеграции GigaChat;
+* ручной путь базовой проверки реального поставщика;
+* отсутствие вызовов реальных поставщиков в стандартных тестах.
 
-Проект не должен превращаться в multi-provider benchmark на MVP phase.
+YandexGPT не требуется для приёмки MVP, пока его явно не переведут из дополнительного направления в обязательный объём.
 
 ---
 
-## 4. Provider Abstraction
+## 3. Обоснование выбора поставщиков
 
-Runtime должен использовать provider abstraction.
+Проект ориентирован на российские корпоративные системы.
 
-Планируемый provider port:
+MVP должен продемонстрировать практическую возможность прямой работы хотя бы с одним отечественным поставщиком LLM.
+
+GigaChat выбран основным реальным поставщиком для первой реализации MVP.
+
+YandexGPT остаётся запланированным дополнительным исследовательским направлением для проверки того, насколько легко архитектура поддержит вторую отечественную модель.
+
+На этапе MVP проект не должен превращаться в сравнительное тестирование множества поставщиков.
+
+---
+
+## 4. Абстракция поставщика
+
+Прикладная логика должна использовать абстракцию поставщика LLM.
+
+Существующий интерфейс поставщика:
 
 ```text
 LLMProviderPort
 → generate_structured_decision(request)
-→ LLMDecisionPayload-compatible response
+→ ответ, совместимый с LLMDecisionPayload
 ```
 
-Provider adapters должны скрывать provider-specific details от workflow orchestration.
+Адаптеры должны скрывать особенности поставщика от координации сценариев.
 
-Workflow code не должен напрямую зависеть от:
+Код сценариев не должен напрямую зависеть от:
 
-* provider SDK internals;
-* provider-specific HTTP payload shape;
-* provider-specific auth mechanics;
-* provider-specific raw response format.
+* внутренних механизмов SDK поставщика;
+* формата HTTP-запросов и ответов конкретного поставщика;
+* его механизма аутентификации;
+* формата его необработанного ответа.
 
-Workflow layer должен получать normalized response, который проходит validation через `LLMDecisionPayload`. Provider-specific HTTP response parsing остаётся внутри provider adapter.
+Слой сценариев должен получать нормализованный ответ, который проходит валидацию через `LLMDecisionPayload`. Разбор HTTP-ответа конкретного поставщика остаётся внутри его адаптера.
 
 ---
 
-## 5. Required Providers
+## 5. Требования к поставщикам
 
-## 5.1. Mock Provider
+## 5.1. Заглушка поставщика
 
-Mock provider обязателен.
+Заглушка обязательна.
 
 Назначение:
 
-* deterministic tests;
-* deterministic evals;
-* local development без external API calls;
-* reproducible behavior во время workflow development.
+* детерминированные тесты;
+* детерминированные приёмочные проверки;
+* локальная разработка без вызовов внешних API;
+* воспроизводимое поведение при разработке сценариев.
 
-Rules:
+Правила:
 
-* mock provider может быть default local provider;
-* mock provider не должен silent replace failed real provider;
-* mock provider outputs должны представлять expected structured decisions;
-* mock provider должен поддерживать success и failure scenarios.
+* заглушка может быть локальным поставщиком по умолчанию;
+* она не должна скрыто заменять реального поставщика при его отказе;
+* её ответы должны представлять ожидаемые структурированные решения;
+* она должна поддерживать успешные и ошибочные сценарии.
 
-Mock provider не является доказательством real model behavior.
+Заглушка не является доказательством поведения реальной модели.
 
 ---
 
-## 5.2. GigaChat Provider
+## 5.2. Поставщик GigaChat
 
-GigaChat — primary real provider.
+GigaChat — основной реальный поставщик LLM.
 
 Назначение:
 
-* продемонстрировать прямую domestic LLM integration;
-* протестировать structured decision generation;
-* протестировать provider error handling;
-* протестировать manual smoke flow;
-* валидировать provider adapter design.
+* продемонстрировать прямую интеграцию с отечественной LLM;
+* проверить генерацию структурированного решения;
+* проверить обработку ошибок поставщика;
+* проверить ручной путь базовой проверки;
+* проверить устройство адаптера поставщика.
 
-Rules:
+Правила:
 
-* GigaChat calls должны быть явно configured;
-* missing или placeholder credentials должны fail early;
-* provider errors должны map to safe application errors;
-* raw provider responses не должны становиться обычным user-facing output;
-* secrets не должны логироваться;
-* default tests не должны вызывать GigaChat.
+* вызовы GigaChat должны быть явно настроены;
+* отсутствие учётных данных или значения-заполнители должны приводить к раннему отказу;
+* ошибки поставщика должны преобразовываться в безопасные ошибки приложения;
+* необработанные ответы поставщика не должны становиться обычным пользовательским выводом;
+* секреты не должны попадать в журналы;
+* стандартные тесты не должны вызывать GigaChat.
 
-Stage 3 verified direct `httpx` GigaChat path как preferred implementation candidate.
+На этапе 3 прямой путь GigaChat через `httpx` был проверен как предпочтительный вариант реализации.
 
-Manual GigaChat PERS smoke подтвердил auth, token acquisition, model listing и simple chat completion.
+Ручная базовая проверка GigaChat PERS подтвердила аутентификацию, получение токена, списка моделей и простой ответ в чате.
 
-Strict `response_format=json_schema` structured output не был accepted в текущем personal-account path. Provider может возвращать JSON-like text, который всё равно требует backend parsing и strict schema validation.
+В проверенном тогда пути личного аккаунта строгий структурированный ответ `response_format=json_schema` не был принят. Поставщик может возвращать текст, похожий на JSON; он всё равно требует серверного разбора и строгой валидации схемы.
 
-MVP не должен зависеть от provider-enforced schema compliance для GigaChat PERS. Backend validation остаётся обязательной.
+MVP не должен зависеть от соблюдения схемы самим GigaChat PERS. Серверная валидация остаётся обязательной.
 
-Реализованные детали Stage 6:
+Реализованные детали этапа 6:
 
-* token acquisition использует OAuth endpoint, configured через `GIGACHAT_AUTH_URL`;
-* chat completions используют configurable `GIGACHAT_BASE_URL` и `/chat/completions`;
-* `GIGACHAT_AUTHORIZATION_KEY` — единственный поддерживаемый GigaChat secret env;
-* предыдущий API-key alias не поддерживается и считается missing config;
-* access tokens кэшируются только в provider instance и refresh, когда expiry information этого требует;
-* каждый real HTTP call использует explicit timeout и bounded retries;
-* retries ограничены transient transport, rate-limit и 5xx failures;
-* provider HTTP, transport, response и schema failures map to safe provider errors with redacted context;
-* structured decisions парсятся из model text через deterministic extraction,
-  `json.loads`, `LLMDecisionPayload` validation и runtime validation;
-* provider-native function calling не используется в Stage 6.
+* получение токена использует OAuth-адрес, заданный через `GIGACHAT_AUTH_URL`;
+* запросы ответов в чате используют настраиваемый `GIGACHAT_BASE_URL` и `/chat/completions`;
+* `GIGACHAT_AUTHORIZATION_KEY` — единственная поддерживаемая переменная окружения с секретом GigaChat;
+* прежний псевдоним ключа API не поддерживается и считается отсутствующей настройкой;
+* токены доступа кэшируются только в экземпляре поставщика и обновляются, когда этого требуют сведения об истечении срока;
+* каждый реальный HTTP-вызов имеет явный тайм-аут и ограниченное число повторов;
+* повторы ограничены временными транспортными сбоями, ограничением частоты и ошибками 5xx;
+* ошибки HTTP, транспорта, ответа и схемы преобразуются в безопасные ошибки поставщика с замаскированным контекстом;
+* структурированные решения разбираются из текста модели через детерминированное извлечение,
+  `json.loads`, валидацию `LLMDecisionPayload` и прикладную валидацию;
+* встроенный механизм вызова функций поставщика на этапе 6 не используется.
 
-OpenAI SDK не был добавлен во время spike, потому что direct HTTP path достаточен для request-shape validation и избегает unnecessary dependency.
+OpenAI SDK не добавлялся во время исследования: прямого HTTP-пути достаточно для проверки формата запроса, и он не требует лишней зависимости.
 
 ---
 
-## 5.3. YandexGPT Provider
+## 5.3. Поставщик YandexGPT
 
-YandexGPT находится в stretch / spike scope.
+YandexGPT находится в дополнительном исследовательском объёме.
 
 Назначение:
 
-* проверить, поддерживает ли provider abstraction второго domestic provider;
-* сравнить implementation friction на high level;
-* опционально выполнить небольшой manual smoke, если это feasible.
+* проверить, поддерживает ли абстракция второго отечественного поставщика;
+* в общих чертах сравнить сложность интеграции;
+* при возможности выполнить небольшую ручную базовую проверку.
 
-Rules:
+Правила:
 
-* YandexGPT не должен задерживать MVP completion, если явно не переведён в required scope;
-* YandexGPT adapter может оставаться stubbed или deferred, если GigaChat path достаточен для MVP;
-* любое Yandex-specific behavior должно быть documented после verification.
+* YandexGPT не должен задерживать завершение MVP, пока его явно не включат в обязательный объём;
+* адаптер YandexGPT может оставаться заглушкой или быть отложен, если пути GigaChat достаточно для MVP;
+* особенности Yandex должны документироваться после проверки.
 
-Stage 3 оставил YandexGPT как deferred adapter stub. Provider boundary может содержать Yandex settings object и fail early при missing или placeholder credentials, но real YandexGPT adapter или smoke script не требуется для MVP progress, если provider явно не переведён из stretch scope.
+После этапа 3 адаптер YandexGPT остался отложенной заглушкой. Слой поставщиков может содержать объект настроек Yandex и рано отказывать при отсутствующих учётных данных или заполнителях. Однако реальный адаптер или скрипт базовой проверки YandexGPT не требуется для продвижения MVP, пока поставщик явно не переведён из дополнительного объёма.
 
 ---
 
-## 6. Provider Configuration
+## 6. Настройка поставщиков
 
-Текущие environment variables:
+Текущие переменные окружения:
 
 ```env
 LLM_PROVIDER=mock
@@ -188,25 +188,25 @@ YANDEX_MODEL=change_me
 ENABLE_REAL_PROVIDER_SMOKE=0
 ```
 
-Rules:
+Правила:
 
-* `.env.example` может содержать только placeholders;
-* real `.env` не должен коммититься;
-* `GIGACHAT_AUTHORIZATION_KEY` — единственное поддерживаемое имя для Basic
-  Authorization key, используемого OAuth request;
-* старые GigaChat secret aliases не поддерживаются;
-* placeholder values, такие как `change_me`, должны отклоняться для real provider calls;
-* provider-specific secrets не должны попадать в logs, audit events, screenshots или public docs.
+* `.env.example` может содержать только значения-заполнители;
+* настоящий `.env` не должен попадать в коммит;
+* `GIGACHAT_AUTHORIZATION_KEY` — единственное поддерживаемое имя ключа
+  Basic Authorization, используемого в OAuth-запросе;
+* старые псевдонимы секрета GigaChat не поддерживаются;
+* заполнители вроде `change_me` должны отклоняться при вызове реального поставщика;
+* секреты поставщиков не должны попадать в журналы, события аудита, скриншоты или публичную документацию.
 
 ---
 
-## 7. Structured Output Policy
+## 7. Политика структурированных ответов
 
-Runtime должен считать LLM output недоверенным, пока он не validated.
+Прикладная логика должна считать ответ LLM недоверенным до завершения валидации.
 
-Предпочтительный model output — structured decision, compatible with project schema.
+Предпочтительный ответ модели — структурированное решение, совместимое со схемой проекта.
 
-Planned decision schema включает:
+Схема решения включает:
 
 ```text
 request_type
@@ -220,152 +220,152 @@ user_facing_summary
 reason_codes
 ```
 
-Rules:
+Правила:
 
-* raw model text считается недоверенным;
-* structured decision parsing использует deterministic JSON object extraction,
-  `json.loads`, `LLMDecisionPayload.model_validate(...)`, затем runtime semantic
-  validation;
-* accepted provider text shapes: single JSON object, one fenced JSON object или one balanced top-level JSON object surrounded by text;
-* zero JSON objects, multiple JSON objects, invalid JSON и non-object JSON
-  roots fail safely;
-* fuzzy repair запрещён: no JSON5, YAML, comment stripping, trailing comma
-  repair, enum autocorrection, tool-name fuzzy matching, automatic reprompting
-  or multiple-candidate selection;
-* unknown enum values должны fail validation;
-* unknown tool names должны fail validation;
-* malformed arguments должны fail validation;
-* invalid structured output не должен execute tools;
-* fallback parsing не должен bypass validation.
+* исходный текст модели считается недоверенным;
+* разбор структурированного решения использует детерминированное извлечение объекта JSON,
+  `json.loads`, `LLMDecisionPayload.model_validate(...)` и затем прикладную смысловую
+  валидацию;
+* допускаются один объект JSON, один объект JSON в блоке кода либо один сбалансированный объект JSON верхнего уровня, окружённый текстом;
+* отсутствие объектов JSON, несколько объектов, некорректный JSON или корень JSON,
+  не являющийся объектом, приводят к безопасному отказу;
+* приблизительное исправление запрещено: нельзя использовать JSON5, YAML, удаление комментариев,
+  исправление завершающей запятой, автокоррекцию перечислений, подбор похожего имени инструмента,
+  автоматический повторный запрос к модели или выбор из нескольких кандидатов;
+* неизвестные значения перечислений должны приводить к ошибке валидации;
+* неизвестные имена инструментов должны приводить к ошибке валидации;
+* некорректные аргументы должны приводить к ошибке валидации;
+* некорректный структурированный ответ не должен приводить к выполнению инструментов;
+* резервный способ разбора не должен обходить валидацию.
 
-Если provider не поддерживает strict structured output напрямую, adapter может parse provider text into structured payload только при сохранении strict validation.
-
----
-
-## 8. Tool / Function Calling Policy
-
-LLM может предлагать tool calls.
-
-LLM не должен выполнять tools напрямую.
-
-Backend владеет:
-
-* available tool registry;
-* tool input schemas;
-* tool output schemas;
-* tool permission metadata;
-* tool validation;
-* tool execution;
-* policy checks;
-* approval gates;
-* audit trail.
-
-Provider-native function/tool calling находится вне Stage 6 scope. Model-suggested tool calls представлены только как validated structured payload proposals.
-
-Rules:
-
-* model-suggested tool calls являются proposals;
-* backend решает, valid ли tool call;
-* backend решает, требует ли tool call approval;
-* backend выполняет tools только через controlled ToolRegistry boundary;
-* MCP — optional external tool boundary, а не canonical internal ToolRegistry;
-* state-changing tools не должны запускаться до policy и approval checks.
+Если поставщик напрямую не поддерживает строгий структурированный ответ, адаптер может разобрать его текст в структурированные данные только с сохранением строгой валидации.
 
 ---
 
-## 9. MCP / Tool Boundary Relation
+## 8. Политика вызова инструментов и функций
 
-MCP или MCP-like tool server — это integration boundary.
+LLM может предлагать вызовы инструментов.
 
-MCP сам по себе не является safety model.
+LLM не должна выполнять инструменты напрямую.
 
-Safety остаётся backend-owned через:
+Сервер отвечает за:
 
-* schema validation;
-* tool registry;
-* policy checks;
-* approval gates;
-* audit trail;
-* safe error handling.
+* реестр доступных инструментов;
+* схемы входных данных инструментов;
+* схемы выходных данных инструментов;
+* сведения о разрешениях инструментов;
+* валидацию инструментов;
+* выполнение инструментов;
+* проверки политики;
+* обязательное согласование;
+* журнал аудита.
 
-Текущее позиционирование:
+Встроенный механизм вызова функций или инструментов поставщика находится вне объёма этапа 6. Предложенные моделью вызовы представлены только проверенными структурированными предложениями.
+
+Правила:
+
+* вызовы инструментов от модели остаются предложениями;
+* сервер определяет, корректен ли вызов;
+* сервер определяет, требует ли вызов согласования;
+* сервер выполняет инструменты только через контролируемый интерфейс ToolRegistry;
+* MCP — необязательная граница внешних инструментов, а не основной внутренний ToolRegistry;
+* изменяющие инструменты не должны запускаться до проверки политики и требований согласования.
+
+---
+
+## 9. Соотношение MCP и границ инструментов
+
+MCP или подобный ему сервер инструментов — граница интеграции.
+
+Сам по себе MCP не является моделью безопасности.
+
+Защита остаётся на стороне сервера и обеспечивается через:
+
+* валидацию схемы;
+* реестр инструментов;
+* проверки политики;
+* обязательное согласование;
+* журнал аудита;
+* безопасную обработку ошибок.
+
+Текущее положение MCP:
 
 ```text
-LLM structured decision
-→ backend validation
+структурированное решение LLM
+→ серверная валидация
 → ToolRegistry
-→ optional MCP / external boundary
-→ tool execution
-→ audit
+→ необязательная граница MCP / внешней системы
+→ выполнение инструмента
+→ аудит
 ```
 
-ToolRegistry остаётся canonical internal tool boundary. MCP является optional и external. Stage 5 access runtime не переписан на MCP.
+ToolRegistry остаётся основным внутренним интерфейсом инструментов. MCP — необязательный внешний интерфейс. Обработчик доступа этапа 5 не переписывался на MCP.
 
-Stage 6 включает локальную deterministic fake MCP boundary для `get_demo_system_status`. Она валидирует typed input/output, normalizes safe MCP errors и покрыта offline tests. Она не подключается к real IAM, HR, CRM, ERP, CMDB или другим enterprise systems.
+Этап 6 включает локальную детерминированную имитацию MCP для `get_demo_system_status`. Она валидирует типизированные входные и выходные данные, нормализует безопасные ошибки MCP и покрыта тестами без внешней сети. Она не подключается к реальным IAM, HR, CRM, ERP, CMDB или другим корпоративным системам.
 
 ---
 
-## 10. Real Provider Smoke Policy
+## 10. Политика базовых проверок реального поставщика
 
-Manual real-provider smoke tests разрешены.
+Ручные базовые проверки реальных поставщиков разрешены.
 
-Они должны быть explicit.
+Они должны запускаться явно.
 
-Required properties:
+Обязательные свойства:
 
-* disabled by default;
-* требуют одновременно environment flag и per-run `--live` flag;
-* требуют real non-placeholder credentials;
-* выводят только safe summaries;
-* избегают раскрытия raw provider payloads, если они не являются явно safe;
-* never run as part of default pytest.
+* отключены по умолчанию;
+* требуют одновременно флаг окружения и флаг `--live` для конкретного запуска;
+* требуют настоящие учётные данные без заполнителей;
+* выводят только безопасные сводки;
+* не раскрывают исходные ответы поставщика, если их безопасность не установлена явно;
+* никогда не выполняются в составе стандартного pytest.
 
-Suggested flag:
+Флаг включения:
 
 ```env
 ENABLE_REAL_PROVIDER_SMOKE=1
 ```
 
-Текущие manual smoke entrypoints:
+Текущие точки входа ручных проверок:
 
 ```text
 uv run python scripts/manual_gigachat_smoke.py --live --matrix lite,pro,max
 uv run python scripts/mcp_smoke.py
 ```
 
-`scripts/manual_gigachat_smoke.py` skipped, если одновременно не установлены
-`ENABLE_REAL_PROVIDER_SMOKE=1` в project-root `.env` и `--live` не передан для этого run. Он загружает project-root `.env` values, отклоняет placeholder credentials, включает `truststore` для local Windows/root-certificate compatibility и печатает только safe normalized diagnostics.
+`scripts/manual_gigachat_smoke.py` пропускает реальные вызовы, если не выполнено хотя бы одно из двух условий:
+в `.env` корня проекта задано `ENABLE_REAL_PROVIDER_SMOKE=1` и для текущего запуска передан `--live`. Скрипт загружает значения из корневого `.env`, отклоняет заполнители учётных данных, включает `truststore` для совместимости с локальными корневыми сертификатами Windows и печатает только безопасную нормализованную диагностику.
 
-GigaChat matrix проверяет Lite, Pro и Max model aliases и печатает:
+Матрица GigaChat проверяет псевдонимы моделей Lite, Pro и Max и печатает:
 
 ```text
 local_extract | ok/fail
 model | auth | chat | structured_decision | schema_valid | stable_enums | stable_tools | usable_for_demo | reason
 ```
 
-MCP smoke script является только local/fake и проверяет:
+Скрипт проверки MCP работает только с локальной имитацией и проверяет:
 
 ```text
 local_boundary | fastmcp_tool | tool_discovery | tool_call | schema_validation | safe_error_mapping
 ```
 
-Manual smoke должен проверять:
+Ручная проверка должна подтверждать:
 
-* provider auth works;
-* simple structured decision call works;
-* provider errors are safely mapped;
-* no secrets are printed;
-* result can be validated by project schema.
+* работоспособность аутентификации поставщика;
+* работоспособность простого запроса структурированного решения;
+* безопасное преобразование ошибок поставщика;
+* отсутствие секретов в выводе;
+* возможность проверить результат по схеме проекта.
 
 ---
 
-## 11. Eval Policy
+## 11. Политика приёмочных проверок
 
-Default evals должны использовать deterministic mock provider.
+Стандартные приёмочные проверки должны использовать детерминированную заглушку поставщика.
 
-Eval scenarios должны тестировать workflow behavior, а не только provider text quality.
+Проверочные сценарии должны тестировать поведение обработки, а не только качество текста поставщика.
 
-Planned metrics:
+Планируемые метрики:
 
 ```text
 schema_valid_rate
@@ -377,17 +377,17 @@ forbidden_action_block_rate
 final_status_accuracy
 ```
 
-Real provider evals могут быть добавлены позже как manual или opt-in runs.
+Проверки реальных поставщиков могут быть добавлены позднее как ручные или явно включаемые запуски.
 
-Real provider evals не должны считаться deterministic tests.
+Их нельзя считать детерминированными тестами.
 
 ---
 
-## 12. Error Handling Policy
+## 12. Политика обработки ошибок
 
-Provider errors должны map to safe application errors.
+Ошибки поставщиков должны преобразовываться в безопасные ошибки приложения.
 
-Error categories могут включать:
+Категории ошибок могут включать:
 
 ```text
 PROVIDER_AUTH_ERROR
@@ -398,7 +398,7 @@ PROVIDER_UNAVAILABLE
 LLM_OUTPUT_VALIDATION_ERROR
 ```
 
-Stage 6 provider errors включают:
+Ошибки поставщиков этапа 6 включают:
 
 ```text
 ProviderConfigurationError
@@ -410,7 +410,7 @@ ProviderSchemaValidationError
 ProviderModelUnavailableError
 ```
 
-Provider errors раскрывают только safe context:
+Ошибки поставщиков раскрывают только безопасный контекст:
 
 ```text
 safe_message
@@ -419,112 +419,112 @@ provider_name
 model_name
 ```
 
-Rules:
+Правила:
 
-* user-facing errors должны быть safe;
-* raw provider exceptions не должны leak to normal users;
-* stack traces не должны exposed through API;
-* internal error details могут записываться только после redaction;
-* failed provider call не должен silently switch to mock.
-
----
-
-## 13. Audit and Logging Policy
-
-Audit должен фиксировать meaningful provider-related events:
-
-* provider selected;
-* model name, if safe;
-* schema version;
-* decision validation status;
-* provider error category;
-* latency metadata, if available;
-* final workflow status.
-
-Audit не должен фиксировать:
-
-* API keys;
-* bearer tokens;
-* authorization headers;
-* raw secrets;
-* full sensitive provider payloads by default;
-* unredacted internal stack traces.
-
-Raw provider response, если он вообще persisted, должен быть internal-only и safe by design.
+* пользовательские сообщения об ошибках должны быть безопасными;
+* исходные исключения поставщика не должны попадать к обычным пользователям;
+* трассировки стека не должны раскрываться через API;
+* внутренние подробности ошибок допускается записывать только после маскирования;
+* неуспешный вызов поставщика не должен приводить к скрытому переключению на заглушку.
 
 ---
 
-## 14. No Silent Fallback Rule
+## 13. Политика аудита и журналирования
 
-Проект не должен silently hide provider failures.
+Аудит должен фиксировать значимые события, связанные с поставщиком:
 
-Forbidden:
+* выбранный поставщик;
+* имя модели, если это безопасно;
+* версия схемы;
+* результат валидации решения;
+* категория ошибки поставщика;
+* сведения о задержке, если доступны;
+* итоговый статус сценария.
+
+Аудит не должен фиксировать:
+
+* ключи API;
+* токены доступа;
+* заголовки авторизации;
+* секреты в открытом виде;
+* полное конфиденциальное содержимое ответов поставщика по умолчанию;
+* внутренние трассировки стека без маскирования.
+
+Если исходный ответ поставщика вообще сохраняется, он должен быть доступен только внутри системы, а безопасность хранения должна быть предусмотрена изначально.
+
+---
+
+## 14. Запрет скрытой подмены поставщика
+
+Проект не должен скрывать сбои поставщика.
+
+Запрещено:
 
 ```text
-GigaChat fails → silently use mock → return success
+GigaChat отказывает → скрыто использовать заглушку → вернуть успех
 ```
 
-Allowed:
+Разрешено:
 
 ```text
-GigaChat fails → return safe provider error
-GigaChat not configured → fail early for real provider mode
-mock mode explicitly configured → use mock
+GigaChat отказывает → вернуть безопасную ошибку поставщика
+GigaChat не настроен → рано отказать в режиме реального поставщика
+режим mock явно настроен → использовать заглушку
 ```
 
-Fallback между real providers может быть рассмотрен на более позднем stage, но это не входит в MVP scope.
+Резервное переключение между реальными поставщиками может рассматриваться на более позднем этапе, но не входит в объём MVP.
 
 ---
 
-## 15. Default Test Boundary
+## 15. Граница стандартных тестов
 
-Default tests должны быть offline и deterministic.
+Стандартные тесты должны быть детерминированными и работать без внешней сети.
 
-Default tests не должны требовать:
+Они не должны требовать:
 
-* GigaChat credentials;
-* Yandex credentials;
-* network access;
-* real provider availability;
-* real enterprise integrations.
+* учётные данные GigaChat;
+* учётные данные Yandex;
+* доступ к сети;
+* доступность реального поставщика;
+* реальные корпоративные интеграции.
 
-Provider adapters должны тестироваться через fake transports или mocked HTTP clients, если не запускается explicit manual smoke.
-
----
-
-## 16. Public Documentation Boundary
-
-Public documentation может описывать:
-
-* accepted provider strategy;
-* mock/GigaChat/Yandex roles;
-* structured-output policy;
-* tool-calling policy;
-* safety boundaries;
-* manual smoke boundary.
-
-Public documentation не должна включать:
-
-* real credentials;
-* private tokens;
-* raw provider logs with sensitive data;
-* paid account details;
-* local secrets;
-* private operational notes.
+Адаптеры поставщиков должны тестироваться через имитирующие транспорты или заглушки HTTP-клиентов, если не запускается явная ручная базовая проверка.
 
 ---
 
-## 17. Update Rule
+## 16. Граница публичной документации
 
-Этот документ должен обновляться, когда:
+Публичная документация может описывать:
 
-* provider strategy changes;
-* GigaChat implementation details are verified;
-* Yandex moves from stretch to required scope;
-* structured output strategy changes;
-* tool/function calling strategy changes;
-* real-provider smoke commands change;
-* default tests start or stop using any provider-related behavior;
-* provider error handling changes.
+* принятую стратегию поставщиков;
+* роли заглушки, GigaChat и Yandex;
+* политику структурированных ответов;
+* политику вызова инструментов;
+* защитные границы;
+* границу ручных базовых проверок.
 
-Не описывайте unverified provider behavior как implemented fact.
+Публичная документация не должна включать:
+
+* реальные учётные данные;
+* частные токены;
+* исходные журналы поставщика с конфиденциальными данными;
+* сведения о платных аккаунтах;
+* локальные секреты;
+* частные операционные заметки.
+
+---
+
+## 17. Правило обновления
+
+Документ должен обновляться, когда:
+
+* меняется стратегия поставщиков;
+* проверены детали реализации GigaChat;
+* Yandex переводится из дополнительного в обязательный объём;
+* меняется стратегия структурированных ответов;
+* меняется стратегия вызова инструментов или функций;
+* меняются команды ручной проверки реального поставщика;
+* стандартные тесты начинают или перестают использовать поведение, связанное с поставщиком;
+* меняется обработка ошибок поставщика.
+
+Не описывайте непроверенное поведение поставщика как реализованный факт.

@@ -2,243 +2,243 @@
 
 ## 1. Архитектурный тезис
 
-Enterprise AI Tool Gateway — это шлюз контролируемого выполнения инструментов LLM для локальных demo-workflows. Модель предлагает структурированное решение, но это решение по умолчанию не считается доверенным. Backend валидирует provider output, проверяет request type и domain template, валидирует предложенные tool names, применяет policy, создаёт approval gates при необходимости, выполняет инструменты только через зарегистрированные backend boundaries, записывает audit events и сохраняет records, привязанные к run.
+Enterprise AI Tool Gateway — шлюз контролируемого выполнения инструментов LLM для локальных демонстрационных сценариев. Модель предлагает структурированное решение, которое по умолчанию считается недоверенным. Сервер проверяет ответ поставщика LLM, тип запроса, предметный шаблон и имена предложенных инструментов, применяет политику выполнения и при необходимости требует согласование. Инструменты выполняются только через зарегистрированные серверные интерфейсы; события аудита и остальные записи сохраняются с привязкой к запуску.
 
-Это не прямое автономное использование инструментов со стороны LLM. LLM не выполняет инструменты, не согласует действия, не пишет в persistence и не владеет workflow state. Эти зоны ответственности принадлежат backend runtime code.
+LLM не выполняет инструменты, не согласует действия, не записывает данные в хранилище и не управляет состоянием сценария. За эти действия отвечает серверная логика обработки.
 
 ## 2. Высокоуровневый системный поток
 
 ```mermaid
 flowchart LR
-    Frontend["Frontend<br/>React/Vite client"]
-    API["FastAPI /api/v1<br/>HTTP adapter"]
-    Runtime["Application runtime<br/>access / procurement / maintenance"]
-    Provider["Provider boundary<br/>structured decision"]
-    Validation["Backend validation<br/>schema, request_type, domain_template, tools"]
-    ReadTools["Tools<br/>registered read checks"]
-    Policy["Policy<br/>state-changing action decision"]
-    Approval["Approval gate<br/>when policy requires it"]
-    ActionTools["Tools<br/>authorized draft action"]
-    Audit["Audit<br/>redacted lifecycle events"]
-    DB[("SQLite persistence<br/>async SQLAlchemy")]
-    Readback["API readback<br/>run-scoped records"]
-    Display["Frontend display<br/>local operations console"]
+    Frontend["Веб-интерфейс<br/>React/Vite"]
+    API["FastAPI /api/v1<br/>HTTP-адаптер"]
+    Runtime["Обработка сценариев<br/>доступ / закупки / обслуживание"]
+    Provider["Интерфейс поставщика LLM<br/>структурированное решение"]
+    Validation["Серверная валидация<br/>схема, request_type, domain_template, инструменты"]
+    ReadTools["Инструменты чтения<br/>зарегистрированные проверки"]
+    Policy["Политика выполнения<br/>решение об изменяющем действии"]
+    Approval["Согласование<br/>по требованию политики"]
+    ActionTools["Инструменты изменения<br/>разрешённое создание черновика"]
+    Audit["Аудит<br/>события с маскированием данных"]
+    DB[("Хранилище SQLite<br/>асинхронный SQLAlchemy")]
+    Readback["Чтение через API<br/>записи конкретного запуска"]
+    Display["Отображение результата<br/>локальная консоль оператора"]
 
     Frontend --> API --> Runtime --> Provider --> Validation
     Validation --> ReadTools --> Policy
-    Policy -->|"allowed"| ActionTools
-    Policy -->|"requires approval"| Approval -->|"approved"| ActionTools
-    Policy -->|"rejected / manual review"| Audit
-    Approval -->|"rejected / cancelled"| Audit
+    Policy -->|"разрешено"| ActionTools
+    Policy -->|"нужно согласование"| Approval -->|"согласовано"| ActionTools
+    Policy -->|"отказ / ручная проверка"| Audit
+    Approval -->|"отклонено / отменено"| Audit
     ActionTools --> Audit
     Runtime --> DB
     Audit --> DB
     DB --> Readback --> Display
 ```
 
-API и frontend являются локальными/demo surfaces. Backend API принимает workflow submissions и approval decisions, а readback endpoints раскрывают run details, tool calls, approvals и audit events. Business outcomes представлены run statuses, а не передачей workflow authority на сторону frontend.
+API и веб-интерфейс предназначены для локальной демонстрации. Серверный API принимает заявки и решения о согласовании, а методы чтения возвращают сведения о запуске, вызовах инструментов, согласованиях и событиях аудита. Результаты обработки выражаются статусами запуска; полномочия по управлению сценарием остаются на сервере.
 
 ## 3. Модель слоёв
 
-Frontend client находится в `frontend/`. Это независимое приложение на React, TypeScript и Vite. Оно обращается к backend через `frontend/src/api`, хранит browser-local known-run state в `frontend/src/state` и владеет typed RU/EN presentation layer в `frontend/src/i18n`.
+Веб-клиент находится в `frontend/`. Это независимое приложение на React, TypeScript и Vite. Оно обращается к серверу через `frontend/src/api`, хранит локальный список известных браузеру запусков в `frontend/src/state` и содержит типизированный слой русских и английских текстов интерфейса в `frontend/src/i18n`.
 
-API adapter находится в `src/enterprise_ai_tool_gateway/api/http`. Он отвечает за FastAPI routing, request DTOs, response DTOs, error normalization, dependency wiring и mapping между API DTOs и application DTOs. Routes остаются тонкими: они не выполняют инструменты, не оценивают policy, не создают audit decisions и не владеют workflow state.
+API-адаптер находится в `src/enterprise_ai_tool_gateway/api/http`. Он отвечает за маршрутизацию FastAPI, DTO запросов и ответов, нормализацию ошибок, подключение зависимостей и преобразование DTO между API и прикладным слоем. Обработчики маршрутов остаются тонкими: они не выполняют инструменты, не оценивают политику, не принимают решения аудита и не управляют состоянием сценария.
 
-Application runtimes находятся в `application/`. Они координируют одну workflow transaction для `ACCESS_REQUEST`, `PROCUREMENT_REQUEST` или `MAINTENANCE_REQUEST`. Они создают runs, вызывают provider boundary, валидируют structured decisions, выполняют registered tools, применяют policy, создают и resolve approvals, сохраняют records и собирают response data.
+Прикладные обработчики находятся в `application/`. Они координируют одну операцию обработки сценария `ACCESS_REQUEST`, `PROCUREMENT_REQUEST` или `MAINTENANCE_REQUEST`: создают запуски, обращаются к поставщику LLM, проверяют структурированные решения, выполняют зарегистрированные инструменты, применяют политику, создают согласования и обрабатывают решения по ним, сохраняют записи и собирают ответ.
 
-Contracts находятся в `contracts/`. Они определяют общие enums и Pydantic contracts, такие как `AgentRun`, `LLMDecision`, `ToolCall`, `Approval`, `AuditEvent`, request types, domain templates, tool types, approval modes и run statuses.
+Контракты находятся в `contracts/`. Они определяют общие перечисления и контракты Pydantic, включая `AgentRun`, `LLMDecision`, `ToolCall`, `Approval`, `AuditEvent`, типы запросов, предметные шаблоны, типы инструментов, режимы согласования и статусы запусков.
 
-Provider boundary находится в `llm/`. Он определяет provider port, safe provider errors, deterministic mock provider behavior, structured-output parsing и optional/manual real-provider support. Provider output должен пройти валидацию по backend contracts, прежде чем runtime примет его.
+Слой поставщиков LLM находится в `llm/`. Он определяет интерфейс поставщика, безопасные ошибки, детерминированное поведение заглушки, разбор структурированного ответа и отдельный ручной путь работы с реальным поставщиком. Ответ поставщика должен пройти проверку по серверным контрактам до принятия прикладным обработчиком.
 
-Policy находится в `policy/`. Он получает backend-built policy request и возвращает decision: allowed, denied, requires approval или needs manual review. Он не выполняет инструменты и не мутирует workflow state.
+Слой политики находится в `policy/`. Он получает сформированный сервером запрос на оценку и возвращает решение: разрешить, запретить, потребовать согласование или ручную проверку. Этот слой не выполняет инструменты и не изменяет состояние сценария.
 
-Tools находятся в `tools/` и workflow-specific packages, таких как `access/`, `procurement/` и `maintenance_lite/`. Generic tool layer владеет `ToolRegistry`, `ToolDefinition` и `ToolExecutor`. Domain packages регистрируют synthetic demo tools и их typed schemas.
+Инструменты находятся в `tools/` и пакетах отдельных сценариев: `access/`, `procurement/` и `maintenance_lite/`. Общий слой инструментов содержит `ToolRegistry`, `ToolDefinition` и `ToolExecutor`. Предметные пакеты регистрируют синтетические демонстрационные инструменты и их типизированные схемы.
 
-Approval находится в `approval/`. Он определяет approval requirements и terminal approval decisions. Application runtimes сохраняют approval records и решают, как approval results влияют на run.
+Слой согласования находится в `approval/`. Он определяет требования к согласованию и окончательные решения. Прикладные обработчики сохраняют записи согласований и определяют влияние решений на запуск.
 
-Audit находится в `audit/`. Он создаёт redacted audit event contracts и recursive payload redaction. Persistence этих событий обрабатывается repository layer.
+Слой аудита находится в `audit/`. Он создаёт контракты событий с замаскированными данными и рекурсивно маскирует содержимое. Сохранением этих событий занимается слой репозиториев.
 
-Persistence находится в `db/`. Он использует async SQLAlchemy с локальным SQLite и repository facade для уже валидированных gateway records. Repository сохраняет facts, выбранные runtime layers; он не принимает policy decisions и не определяет workflow outcomes.
+Слой хранения находится в `db/`. Он использует асинхронный SQLAlchemy, локальный SQLite и фасад репозитория для уже проверенных записей шлюза. Репозиторий сохраняет факты, выбранные прикладными обработчиками; он не принимает решения политики и не определяет результат сценария.
 
-Evals находятся в `evals/` и `scripts/run_eval.py`. Они проверяют API через deterministic acceptance cases и mock/fake providers.
+Приёмочные проверки находятся в `evals/` и `scripts/run_eval.py`. Они проверяют API на детерминированных случаях с заглушками поставщиков.
 
 ## 4. Жизненный цикл запроса
 
 ```mermaid
 sequenceDiagram
-    participant User as User / UI
-    participant FE as Web Frontend
+    participant User as Пользователь
+    participant FE as Веб-интерфейс
     participant API as FastAPI /api/v1
-    participant WF as Application Runtime
-    participant Provider as LLM Provider<br/>(mock by default)
-    participant Validation as Contract / Domain Validation
-    participant Policy as Policy Layer
-    participant Approval as Approval Layer
-    participant Tools as Tool Layer
-    participant DB as DB / Audit Events
+    participant WF as Прикладной обработчик
+    participant Provider as Поставщик LLM<br/>(по умолчанию заглушка)
+    participant Validation as Проверка контрактов<br/>и предметных правил
+    participant Policy as Политика выполнения
+    participant Approval as Согласование
+    participant Tools as Инструменты
+    participant DB as Хранилище и аудит
 
-    User->>FE: Submit workflow form
+    User->>FE: Отправить форму заявки
     FE->>API: POST /api/v1/{workflow endpoint}
-    API->>WF: Submit workflow request
-    WF->>DB: create AgentRun + audit run_started
+    API->>WF: Передать заявку на обработку
+    WF->>DB: Создать AgentRun и событие run_started
 
-    WF->>Provider: request structured decision
-    Provider-->>WF: structured proposal
+    WF->>Provider: Запросить структурированное решение
+    Provider-->>WF: Предложение решения
 
-    WF->>Validation: validate schema, request_type, domain_template, tool proposal
+    WF->>Validation: Проверить схему, request_type, domain_template и инструменты
 
-    alt invalid provider/tool proposal
-        Validation-->>WF: validation failed
-        WF->>DB: persist FAILED_VALIDATION + audit failure
-        WF-->>API: controlled FAILED_VALIDATION
-    else valid proposal
-        Validation-->>WF: valid decision
-        WF->>Tools: execute allowed read/check tools
-        Tools-->>WF: read/check results
-        WF->>Policy: evaluate risk and approval requirement
+    alt Некорректное предложение поставщика или инструмента
+        Validation-->>WF: Проверка не пройдена
+        WF->>DB: Сохранить FAILED_VALIDATION и событие ошибки
+        WF-->>API: Контролируемый FAILED_VALIDATION
+    else Предложение прошло проверку
+        Validation-->>WF: Корректное решение
+        WF->>Tools: Выполнить разрешённые проверки чтения
+        Tools-->>WF: Результаты проверок
+        WF->>Policy: Оценить риск и необходимость согласования
 
-        alt safe auto path
-            Policy-->>WF: allowed without approval
-            WF->>Tools: execute controlled draft/action tool
-            alt tool succeeds
-                Tools-->>WF: tool result
-                WF->>DB: persist tool call + audit result
-                WF-->>API: controlled COMPLETED
-            else tool fails
-                Tools-->>WF: controlled tool error
-                WF->>DB: persist FAILED_TOOL + audit failure
-                WF-->>API: controlled FAILED_TOOL
+        alt Безопасное выполнение без согласования
+            Policy-->>WF: Разрешено без согласования
+            WF->>Tools: Выполнить разрешённое создание черновика
+            alt Инструмент выполнен успешно
+                Tools-->>WF: Результат инструмента
+                WF->>DB: Сохранить вызов инструмента и событие результата
+                WF-->>API: Контролируемый COMPLETED
+            else Ошибка инструмента
+                Tools-->>WF: Безопасная ошибка инструмента
+                WF->>DB: Сохранить FAILED_TOOL и событие ошибки
+                WF-->>API: Контролируемый FAILED_TOOL
             end
 
-        else approval required
-            Policy-->>WF: approval required
-            WF->>Approval: create pending approval
-            WF->>DB: persist approval + audit approval_required
-            WF-->>API: controlled WAITING_FOR_APPROVAL
+        else Требуется согласование
+            Policy-->>WF: Требуется согласование
+            WF->>Approval: Создать ожидающее согласование
+            WF->>DB: Сохранить согласование и событие approval_required
+            WF-->>API: Контролируемый WAITING_FOR_APPROVAL
 
-            User->>FE: Approve / reject / cancel
+            User->>FE: Согласовать, отклонить или отменить
             FE->>API: POST /api/v1/approvals/{approval_id}/resolve
-            API->>WF: resolve approval
+            API->>WF: Обработать решение о согласовании
 
-            alt approved
-                WF->>Tools: execute controlled draft/action tool
-                Tools-->>WF: tool result
-                WF->>DB: persist approval decision + tool result + audit
-                WF-->>API: controlled COMPLETED
-            else rejected or cancelled
-                WF->>DB: persist decision + audit rejection/cancel
-                WF-->>API: controlled REJECTED
+            alt Согласовано
+                WF->>Tools: Выполнить разрешённое создание черновика
+                Tools-->>WF: Результат инструмента
+                WF->>DB: Сохранить решение, результат инструмента и аудит
+                WF-->>API: Контролируемый COMPLETED
+            else Отклонено или отменено
+                WF->>DB: Сохранить решение и событие отказа или отмены
+                WF-->>API: Контролируемый REJECTED
             end
 
-        else manual review or rejected
-            Policy-->>WF: manual review / reject
-            WF->>DB: persist controlled outcome + audit
-            WF-->>API: NEEDS_MANUAL_REVIEW or REJECTED
+        else Ручная проверка или отказ
+            Policy-->>WF: Ручная проверка или отказ
+            WF->>DB: Сохранить результат и событие аудита
+            WF-->>API: NEEDS_MANUAL_REVIEW или REJECTED
         end
     end
 
-    API-->>FE: public response with run_id + status
-    FE->>API: GET run detail / tool calls / approvals / audit
-    API->>DB: read persisted records
-    DB-->>API: internal records
-    API-->>FE: redacted public DTOs
+    API-->>FE: Публичный ответ с run_id и статусом
+    FE->>API: GET: запуск / инструменты / согласования / аудит
+    API->>DB: Прочитать сохранённые записи
+    DB-->>API: Внутренние записи
+    API-->>FE: Публичные DTO с маскированием данных
 ```
 
-Run создаётся до вызова provider. Затем provider decision сохраняется как запись `LLMDecision`, если его можно представить в виде ожидаемой schema. Runtime validation отклоняет несовпадающие request types, несовпадающие domain templates и неизвестные tool proposals до выполнения любого tool plan. Отсутствующие business fields останавливают процесс со статусом `NEEDS_USER_INPUT`.
+Запуск создаётся до обращения к поставщику LLM. Затем решение поставщика сохраняется как запись `LLMDecision`, если оно представимо в ожидаемой схеме. Прикладная валидация отклоняет несовпадающие типы запросов, предметные шаблоны и неизвестные предложения инструментов до выполнения любого плана инструментов. Отсутствие обязательных предметных полей останавливает обработку со статусом `NEEDS_USER_INPUT`.
 
-Read tools выполняются до финального решения о state-changing draft action. Policy оценивается относительно draft action. Если требуется approval, runtime создаёт pending approval и waiting action tool call, но не выполняет draft tool. Draft tool запускается только после того, как policy разрешила его напрямую, либо после approval pending-согласования.
+Инструменты чтения выполняются до окончательного решения о создании черновика изменяющим инструментом. Политика оценивает именно действие создания черновика. Если нужно согласование, обработчик создаёт ожидающее согласование и ожидающий вызов изменяющего инструмента, но не запускает его. Инструмент создания черновика выполняется только после прямого разрешения политики либо после положительного решения по ожидающему согласованию.
 
 ## 5. Граница выполнения инструментов
 
-`ToolRegistry` — это canonical internal tool boundary. Он хранит именованные объекты `ToolDefinition` с tool name, description, `ToolType`, input model, output model, risk level, default approval metadata и handler.
+`ToolRegistry` — основной внутренний интерфейс регистрации инструментов. Он хранит именованные объекты `ToolDefinition` с именем, описанием, `ToolType`, моделями входа и выхода, уровнем риска, настройками обязательного согласования по умолчанию и обработчиком.
 
-`ToolExecutor` валидирует каждый input payload по зарегистрированной input Pydantic model, блокирует non-read-only tools, если `execution_authorized=True` не передан, выполняет handler и валидирует output по зарегистрированной output model. Если tool handler выбрасывает исключение, executor возвращает failed tool result с safe error message. Runtime helpers перехватывают registry и validation failures и сохраняют safe failed tool calls.
+`ToolExecutor` проверяет входные данные по зарегистрированной модели Pydantic, блокирует инструменты, не относящиеся к чтению, если не передано `execution_authorized=True`, выполняет обработчик и проверяет результат по зарегистрированной модели выхода. Если обработчик инструмента выбрасывает исключение, исполнитель возвращает неуспешный результат с безопасным сообщением об ошибке. Вспомогательная логика прикладного слоя перехватывает ошибки реестра и валидации и сохраняет безопасные записи неуспешных вызовов.
 
-Текущие значения `ToolType`: `READ_ONLY`, `STATE_CHANGING`, `APPROVAL` и `AUDIT`. Реализованные demo workflows в основном используют read-only synthetic checks и state-changing synthetic draft actions. Категория внешних irreversible enterprise tools не реализована.
+Текущие значения `ToolType`: `READ_ONLY`, `STATE_CHANGING`, `APPROVAL` и `AUDIT`. Реализованные демонстрационные сценарии преимущественно используют синтетические проверки чтения и синтетические действия создания черновиков. Внешние инструменты для необратимых действий в корпоративных системах не реализованы.
 
-Allowed tool names принадлежат каждому runtime и registry. Provider proposals являются только proposals. Unknown tools, tools outside the workflow allowlist или tools, отсутствующие в registry, приводят к validation failure. Backend не угадывает, не fuzzy-match и не autocorrect tool names.
+Разрешённые имена инструментов определяются каждым обработчиком и реестром. Поставщик LLM только предлагает инструменты. Неизвестные инструменты, инструменты вне разрешённого списка сценария и отсутствующие в реестре инструменты приводят к ошибке валидации. Сервер не угадывает имена, не подбирает похожие и не исправляет их автоматически.
 
-## 6. Approval boundary
+## 6. Граница согласования
 
-Approval требуется, когда policy возвращает `REQUIRES_APPROVAL`. Default policy требует approval для high-risk state-changing tool calls, tools, помеченных как requiring approval by default, и режима `ALWAYS_REQUIRE`. Critical-risk calls переводятся в manual review, а не согласуются автоматически.
+Согласование обязательно, когда политика возвращает `REQUIRES_APPROVAL`. Политика по умолчанию требует его для изменяющих вызовов с высоким риском, инструментов с обязательным согласованием по умолчанию и режима `ALWAYS_REQUIRE`. Вызовы с критическим риском направляются на ручную проверку, а не согласуются автоматически.
 
-Approval safety floor означает, что `AUTO_APPROVE` не может обойти high-risk, critical-risk или default-approval state-changing draft controls. `AUTO_APPROVE` может разрешать low или medium state-changing actions только после того, как backend validation и policy checks приняли действие.
+Обязательный минимум контроля означает, что `AUTO_APPROVE` не обходит ограничения для изменяющих действий с высоким или критическим риском либо с обязательным согласованием по умолчанию. `AUTO_APPROVE` может разрешать изменяющие действия с низким или средним риском только после успешной серверной валидации и проверки политики.
 
-Когда требуется approval, runtime сохраняет pending approval и state-changing action tool call со статусом `WAITING_FOR_APPROVAL`. Draft action не запускается, и draft output не создаётся до обязательного approval.
+При необходимости согласования обработчик сохраняет ожидающее согласование и вызов изменяющего инструмента со статусом `WAITING_FOR_APPROVAL`. Действие не запускается, и черновик не создаётся до обязательного разрешения.
 
-Approved decision возобновляет run и выполняет waiting action tool call с explicit authorization. Rejected или cancelled decision помечает waiting tool call как rejected при его наличии, обновляет run до `REJECTED` и записывает audit events. Request validation требует непустой `decided_by`. Persistence-level conditional pending-to-terminal update назначает ровно одного terminal owner; concurrent, repeated, stale или non-owned resolve получает controlled `409 state_conflict` до action-tool, run, terminal ToolCall или terminal audit mutations loser-а.
+Положительное решение возобновляет запуск и выполняет ожидающий вызов с явным разрешением. Отказ или отмена помечает ожидающий вызов как отклонённый, если он существует, переводит запуск в `REJECTED` и записывает события аудита. Валидация запроса требует непустой `decided_by`. Условное обновление в хранилище даёт ровно одному решению право перевести ожидающее согласование в окончательное состояние. Конкурирующее, повторное, устаревшее решение или решение без права на этот переход получает контролируемый `409 state_conflict` до выполнения изменяющего инструмента, изменения запуска, окончательной записи `ToolCall` или окончательных событий аудита со стороны проигравшего запроса.
 
-## 7. Provider boundary
+## 7. Граница поставщика LLM
 
-Providers создают structured decisions, совместимые с `LLMDecisionPayload`. Этот payload включает request type, domain template, confidence, risk level, approval signal, missing fields, proposed tool calls, user-facing summary и reason codes.
+Поставщики создают структурированные решения, совместимые с `LLMDecisionPayload`. Решение содержит тип запроса, предметный шаблон, уверенность, уровень риска, признак согласования, отсутствующие поля, предложенные вызовы инструментов, понятное пользователю резюме и коды причин.
 
-Backend валидирует provider result в два этапа. Во-первых, payload должен распарситься и пройти валидацию по Pydantic contract. Во-вторых, selected runtime проверяет semantic constraints: request type должен соответствовать endpoint workflow, domain template должен соответствовать runtime, а proposed tool names должны быть allowed и registered.
+Сервер проверяет результат в два этапа. Сначала данные должны быть разобраны и пройти валидацию по контракту Pydantic. Затем выбранный прикладной обработчик проверяет смысловые ограничения: тип запроса должен соответствовать сценарию API, предметный шаблон — обработчику, а имена предложенных инструментов должны быть разрешены и зарегистрированы.
 
-API path по умолчанию использует deterministic mock/fake providers. Capabilities endpoint сообщает `provider_mode` как `mock` и раскрывает `model_selection.enabled = false`, `active_profile = "mock"` и `available_profiles = ["mock"]`.
+API по умолчанию использует детерминированные заглушки поставщиков. Метод возможностей сообщает `provider_mode` как `mock` и возвращает `model_selection.enabled = false`, `active_profile = "mock"` и `available_profiles = ["mock"]`.
 
-Optional GigaChat support и manual smoke utilities существуют, но real-provider smoke является явным и ручным. Он не является default API или frontend path и не должен запускаться как часть default tests. Не реализованы OpenRouter, YandexGPT runtime selection, provider marketplace, provider fallback routing или frontend model selector.
+Поддержка GigaChat и утилиты ручной проверки существуют, но проверка реального поставщика запускается только явно и вручную. Она не входит в стандартный путь API или веб-интерфейса и не должна выполняться в составе обычных тестов. Не реализованы OpenRouter, выбор YandexGPT во время работы, каталог поставщиков, резервная маршрутизация между ними или выбор модели в интерфейсе.
 
-## 8. Граница audit и redaction
+## 8. Граница аудита и маскирования данных
 
-Audit events фиксируют значимые lifecycle steps, такие как run creation, provider selection, decision validation, tool execution, policy checks, approval requests, approval decisions, manual review, rejection, completion и failure.
+События аудита фиксируют значимые этапы жизненного цикла: создание запуска, выбор поставщика, валидацию решения, выполнение инструментов, проверки политики, запросы и решения согласования, ручную проверку, отказ, завершение и ошибки.
 
-При создании audit events применяется recursive redaction к payloads до persistence. Public API projection также редактирует/маскирует tool input/output payloads и approval free-text fields, такие как summary, reason, decided_by и decision_comment.
+При создании событий их содержимое рекурсивно маскируется до сохранения. Публичное представление API также маскирует входные и выходные данные инструментов и свободные текстовые поля согласований, например `summary`, `reason`, `decided_by` и `decision_comment`.
 
-Redaction основан на keys и values. Secret-like keys и high-confidence marker-shaped values, включая quoted/serialized credential assignments, заменяются на `[REDACTED]`, а длинные строки обрезаются. Обычный explanatory text с colon-bearing prose не считается credential только по форме. Persisted runtime records могут содержать больше внутренних деталей, чем раскрывают public API DTOs, особенно для tool payloads и approval records.
+Маскирование учитывает ключи и значения. Значения полей с ключами, похожими на секреты, и значения с уверенно распознаваемыми маркерами, включая присваивания учётных данных в кавычках или сериализованном виде, заменяются на `[REDACTED]`; длинные строки обрезаются. Обычный поясняющий текст с двоеточиями не считается учётными данными только из-за такой формы. Сохранённые внутренние записи могут содержать больше подробностей, чем публичные DTO API, особенно для содержимого инструментов и согласований.
 
-Этот redaction layer является marker-based safety boundary для локального прототипа. Это не полноценный security, privacy, DLP или classification product.
+Этот слой распознавания маркеров — ограниченная защитная граница локального прототипа. Он не является полноценной системой безопасности, защиты частной информации, DLP или классификации данных.
 
-## 9. Модель persistence
+## 9. Модель хранения данных
 
-Прототип использует локальный SQLite через async SQLAlchemy. Default API app сохраняет данные по локальному SQLite database path и создаёт schema при startup. Tests и evals могут создавать isolated temporary SQLite databases.
+Прототип использует локальный SQLite через асинхронный SQLAlchemy. Приложение API по умолчанию сохраняет данные в локальную базу SQLite и создаёт схему при запуске. Тесты и приёмочные проверки могут создавать изолированные временные базы SQLite.
 
-Persisted gateway records:
+Сохраняемые записи шлюза:
 
-* `AgentRun`: run envelope, request text, approval mode, current status, selected request type/domain template, risk, provider metadata, final summary и safe error fields.
-* `LLMDecision`: validated provider decision payload, schema-valid flag, validation errors и confidence.
-* `ToolCall`: каждый proposed или executed tool call, tool type, status, input/output payloads, safe error message и approval link.
-* `Approval`: pending или terminal approval state, approver role, summary, reason и decision metadata.
-* `AuditEvent`: run-scoped event type, actor, redacted payload и timestamp.
+* `AgentRun`: общие сведения о запуске, текст запроса, режим согласования, текущий статус, выбранные тип запроса и предметный шаблон, риск, сведения о поставщике, итоговое резюме и безопасные поля ошибок.
+* `LLMDecision`: проверенное решение поставщика, признак соответствия схеме, ошибки валидации и уверенность.
+* `ToolCall`: каждый предложенный или выполненный вызов, тип инструмента, статус, входные и выходные данные, безопасное сообщение об ошибке и ссылка на согласование.
+* `Approval`: ожидающее или окончательное состояние согласования, роль согласующего, резюме, причина и сведения о решении.
+* `AuditEvent`: тип события, исполнитель, замаскированное содержимое и время с привязкой к запуску.
 
-Repository является persistence facade. Он сохраняет и читает уже выбранные facts и намеренно не владеет general workflow transition validation, policy decisions или tool authorization. Узкое исключение — atomic conditional claim pending approval в terminal state: это persistence ownership boundary, предотвращающая двух terminal winners, но не выбирающая business outcome.
+Репозиторий служит фасадом хранения: он сохраняет и читает уже выбранные факты и намеренно не отвечает за общую проверку переходов сценария, решения политики или разрешения инструментов. Узкое исключение — атомарный условный захват права перевести ожидающее согласование в окончательное состояние. Эта граница хранения предотвращает появление двух победивших решений, но не выбирает предметный результат.
 
-## 10. Граница Frontend/API
+## 10. Граница веб-интерфейса и API
 
-Frontend независим от Python backend. `frontend/src/api` отвечает за все HTTP calls к `/api/v1`, включая workflow submit, capabilities, health, approval resolution и run-scoped readback. TypeScript types отражают shapes public API DTO и не импортируют backend Python internals.
+Веб-интерфейс независим от серверной части на Python. `frontend/src/api` отвечает за все HTTP-запросы к `/api/v1`: отправку заявок, чтение возможностей и состояния API, обработку решений согласования и чтение записей конкретного запуска. Типы TypeScript отражают публичные DTO API и не импортируют внутренний код Python.
 
-Frontend не выполняет workflow logic, не вызывает providers, не оценивает policy, не запускает tools, не approves actions locally и не читает SQLite database. Он отображает backend-controlled results, возвращённые API.
+Интерфейс не обрабатывает предметную логику, не вызывает поставщиков, не оценивает политику, не запускает инструменты, не согласует действия локально и не читает SQLite. Он отображает результаты, которыми управляет сервер и которые возвращает API.
 
-Local known-run index хранит run IDs и selected run ID в browser local storage для текущей demo session; locale preference хранится отдельно как presentation convenience. Storage failures не превращают backend outcome в application failure: текущий tab сохраняет usable in-memory state, но persistence нескольких ключей не является atomic. Это не backend global run index, global audit search, production approval queue или multi-user history system.
+Локальный список известных запусков хранит их идентификаторы и идентификатор выбранного запуска в хранилище браузера для текущего сеанса демонстрации. Выбранный язык сохраняется отдельно как настройка отображения. Ошибка хранилища не превращает результат сервера в ошибку приложения: текущая вкладка сохраняет работоспособное состояние в памяти, но сохранение нескольких ключей не атомарно. Это не глобальный серверный список запусков, общий поиск по аудиту, промышленная очередь согласований или многопользовательская история.
 
-Aggregate UI reads различают complete, partial и unavailable state, failed refresh сохраняет persistent stale/error evidence, а run/approval data, controls, drafts и async outcomes остаются identity-scoped. UI — это локальная Gateway Operations Console для отправки demo workflows, просмотра run detail, разрешения run-scoped approvals и инспекции run-scoped tool calls и audit events.
+При сводном чтении интерфейс различает полные, частичные и недоступные данные. Неудачное обновление сохраняет признаки устаревших данных или ошибки. Данные запусков и согласований, элементы управления, черновики и асинхронные результаты остаются привязаны к конкретной сущности. Интерфейс — локальная консоль оператора Gateway Operations Console для отправки демонстрационных заявок, просмотра запуска, обработки его согласований и проверки вызовов инструментов и событий аудита этого запуска.
 
-RU/EN localization изменяет только presentation. Fresh local/demo session по умолчанию использует RU; переключение locale не remount-ит route state и не изменяет API paths, JSON keys, canonical IDs/enums, raw JSON или backend-provided text.
+Локализация RU/EN меняет только отображение. Новый локальный сеанс по умолчанию использует русский язык; переключение языка не пересоздаёт состояние маршрута и не меняет пути API, ключи JSON, канонические идентификаторы и перечисления, исходный JSON или текст, полученный от сервера.
 
-## 11. Failure model
+## 11. Модель ошибок
 
-Controlled business outcomes представлены run statuses. Они не являются автоматическими HTTP errors. Валидный workflow submission может вернуть HTTP 200 с controlled stop status, когда backend намеренно отклоняет, ставит на паузу или безопасно завершает run с ошибкой.
+Контролируемые предметные результаты выражаются статусами запуска. Они не становятся HTTP-ошибками автоматически. Корректная заявка может получить HTTP 200 со статусом контролируемой остановки, если сервер намеренно отклонил запуск, приостановил его или безопасно завершил с ошибкой.
 
-Основные controlled statuses:
+Основные контролируемые статусы:
 
-* `COMPLETED`: run достиг принятого final state, часто с synthetic draft output.
-* `WAITING_FOR_APPROVAL`: существует required approval, а state-changing draft action ещё не выполнен.
-* `NEEDS_USER_INPUT`: отсутствуют обязательные request fields.
-* `NEEDS_MANUAL_REVIEW`: policy или synthetic data checks требуют manual review.
-* `REJECTED`: policy или approval отклонили run.
-* `FAILED_VALIDATION`: provider output, domain template или proposed tool names не прошли backend validation.
-* `FAILED_TOOL`: tool boundary или draft action безопасно завершились с ошибкой.
-* `FAILED_PROVIDER`: provider boundary безопасно завершился с ошибкой.
+* `COMPLETED`: запуск достиг принятого конечного состояния, часто с синтетическим черновиком.
+* `WAITING_FOR_APPROVAL`: требуется согласование, а действие создания черновика ещё не выполнено.
+* `NEEDS_USER_INPUT`: отсутствуют обязательные поля запроса.
+* `NEEDS_MANUAL_REVIEW`: политика или проверки синтетических данных требуют ручной проверки.
+* `REJECTED`: политика или решение согласования отклонили запуск.
+* `FAILED_VALIDATION`: ответ поставщика, предметный шаблон или имена предложенных инструментов не прошли серверную валидацию.
+* `FAILED_TOOL`: вызов инструмента или создание черновика безопасно завершились с ошибкой.
+* `FAILED_PROVIDER`: обращение к поставщику безопасно завершилось с ошибкой.
 
-HTTP errors всё ещё существуют для malformed request bodies, unknown run или approval IDs, invalid approval decisions, state conflicts и unexpected internal API errors. Unexpected API errors возвращают generic safe error response.
+HTTP-ошибки по-прежнему используются для некорректных тел запросов, неизвестных идентификаторов запусков и согласований, недопустимых решений согласования, конфликтов состояния и неожиданных внутренних ошибок API. При неожиданной ошибке API возвращает обобщённый безопасный ответ.
 
 ## 12. Архитектурные ограничения
 
-Это локальный/demo-прототип. По умолчанию он использует deterministic mock/fake providers и synthetic workflow data для примеров access, procurement и maintenance-lite.
+Это локальный демонстрационный прототип. По умолчанию он использует детерминированные заглушки поставщиков и синтетические данные для доступа, закупок и облегчённого сценария обслуживания.
 
-Прототип не реализует production authentication, RBAC, tenants, organization administration, production security hardening, production observability, background workers, hosted deployment или migration management.
+Прототип не реализует промышленную аутентификацию, RBAC, изоляцию организаций, администрирование организаций, подготовку безопасности и наблюдаемости к промышленной эксплуатации, фоновые обработчики, размещение на сервере или управление миграциями.
 
-Он не включает реальные connectors для IAM, ERP, 1C, Jira, CRM, CMMS, EAM, vendor, purchasing или maintenance. Demo actions создают только synthetic drafts.
+Реальные подключения к IAM, ERP, 1C, Jira, CRM, CMMS, EAM, системам поставщиков, закупок и обслуживания отсутствуют. Демонстрационные действия создают только синтетические черновики.
 
-Он не реализует provider/model selection, provider routing, OpenRouter или YandexGPT runtime integration, streaming, quota/billing controls или frontend model selector.
+Не реализованы выбор поставщика или модели, маршрутизация запросов между поставщиками, интеграция OpenRouter или YandexGPT во время работы, потоковые ответы, контроль квот и оплаты или выбор модели в интерфейсе.
 
-Он не реализует workflow builder, policy editor, global backend run/listing search, global audit search или production approval queue. Будущее расширение должно сохранять ту же control model: backend validation, explicit tool boundaries, policy checks, approval gates и auditability.
+Нет конструктора сценариев, редактора политик, глобального серверного поиска и списка запусков, общего поиска по аудиту или промышленной очереди согласований. Будущее расширение должно сохранять ту же модель контроля: серверную валидацию, явные границы инструментов, проверки политики, обязательное согласование и проверяемый аудит.

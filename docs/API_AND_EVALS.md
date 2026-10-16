@@ -1,26 +1,26 @@
-# API и Evals
+# API и приёмочные проверки
 
 ## 1. Назначение
 
-API — это локальная/demo acceptance surface для шлюза контролируемого выполнения инструментов LLM. Он принимает synthetic workflow requests, делегирует orchestration backend application runtimes, раскрывает controlled run outcomes и предоставляет run-scoped readback для tool calls, approvals и audit events.
+API предоставляет локальный демонстрационный интерфейс шлюза контролируемого выполнения инструментов LLM. Он принимает запросы для сценариев на синтетических данных, передаёт обработку прикладным компонентам серверной части, возвращает контролируемые результаты запусков и позволяет прочитать вызовы инструментов, согласования и события аудита отдельного запуска.
 
-Eval suite проверяет, что этот gateway lifecycle ведёт себя детерминированно через public API. Это acceptance verification для backend control behavior, а не LLM benchmark, benchmark качества provider, production monitor или тест реального external service.
+Набор приёмочных проверок подтверждает детерминированное поведение этого жизненного цикла через публичный API. Это проверка серверного управления выполнением, а не сравнение моделей LLM, оценка качества поставщика модели, мониторинг промышленной системы или тест реального внешнего сервиса.
 
 ## 2. Принципы проектирования API
 
-* `/api/v1` — это локальная/demo API surface.
-* API routes являются inbound adapters. Они выполняют mapping request DTOs, вызывают application runtimes или repository read methods и возвращают public response DTOs.
-* Application runtimes владеют workflow orchestration, включая provider calls, backend validation, tool execution, policy checks, approvals, persistence и audit events.
-* Business outcomes являются controlled gateway statuses на run. Валидный API request может вернуть HTTP 200 с controlled stop, например `REJECTED`, `NEEDS_MANUAL_REVIEW` или `FAILED_VALIDATION`.
-* Default provider mode — детерминированный `mock`.
-* Provider/model selection отключён. Workflow submit DTOs отклоняют неожиданные provider/model selection fields.
+* `/api/v1` — публичный API локального демонстрационного приложения.
+* Маршруты API являются входными адаптерами: преобразуют DTO запросов, вызывают прикладные компоненты или методы чтения репозитория и возвращают публичные DTO ответов.
+* Прикладные компоненты управляют сценарием: обращениями к поставщику модели, серверной валидацией, выполнением инструментов, проверками политики выполнения, согласованиями, сохранением данных и аудитом.
+* Результат обработки выражается контролируемым статусом запуска. Корректный запрос API может вернуть HTTP 200 с остановкой по политике шлюза, например `REJECTED`, `NEEDS_MANUAL_REVIEW` или `FAILED_VALIDATION`.
+* По умолчанию используется детерминированная заглушка `mock`.
+* Выбор поставщика LLM и модели отключён. DTO отправки сценариев отклоняют дополнительные поля такого выбора.
 
-## 3. Capabilities и health
+## 3. Состояние API и доступные возможности
 
-| Method | Path                   | Назначение                                                               |
-| ------ | ---------------------- | ------------------------------------------------------------------------ |
-| `GET`  | `/api/v1/health`       | Возвращает local API health.                                             |
-| `GET`  | `/api/v1/capabilities` | Возвращает metadata реализованных demo workflow и provider capabilities. |
+| Метод | Путь | Назначение |
+| --- | --- | --- |
+| `GET` | `/api/v1/health` | Проверить доступность локального API. |
+| `GET` | `/api/v1/capabilities` | Получить сведения о реализованных демонстрационных сценариях и возможностях поставщика модели. |
 
 `GET /api/v1/health` возвращает:
 
@@ -30,20 +30,20 @@ Eval suite проверяет, что этот gateway lifecycle ведёт се
 
 `GET /api/v1/capabilities` раскрывает:
 
-| Field                                | Текущее значение                                               |
-| ------------------------------------ | -------------------------------------------------------------- |
-| `workflows`                          | `ACCESS_REQUEST`, `PROCUREMENT_REQUEST`, `MAINTENANCE_REQUEST` |
-| `approval_modes`                     | `AUTO_APPROVE`, `HIGH_RISK_ONLY`, `ALWAYS_REQUIRE`             |
-| `provider_mode`                      | `mock`                                                         |
-| `model_selection.enabled`            | `false`                                                        |
-| `model_selection.active_profile`     | `mock`                                                         |
-| `model_selection.available_profiles` | `["mock"]`                                                     |
+| Поле | Текущее значение |
+| --- | --- |
+| `workflows` | `ACCESS_REQUEST`, `PROCUREMENT_REQUEST`, `MAINTENANCE_REQUEST` |
+| `approval_modes` | `AUTO_APPROVE`, `HIGH_RISK_ONLY`, `ALWAYS_REQUIRE` |
+| `provider_mode` | `mock` |
+| `model_selection.enabled` | `false` |
+| `model_selection.active_profile` | `mock` |
+| `model_selection.available_profiles` | `["mock"]` |
 
-Capabilities response намеренно не рекламирует GigaChat, OpenRouter, YandexGPT или provider marketplace как selectable API options.
+Ответ о возможностях намеренно не представляет GigaChat, OpenRouter, YandexGPT или каталог поставщиков моделей как доступные для выбора варианты API.
 
-## 4. Workflow submit endpoints
+## 4. Отправка сценариев
 
-Все workflow submit endpoints возвращают `WorkflowResultResponse`, содержащий:
+Все маршруты отправки возвращают `WorkflowResultResponse`, содержащий:
 
 * `run`;
 * `final_summary`;
@@ -52,13 +52,15 @@ Capabilities response намеренно не рекламирует GigaChat, O
 * `tool_calls`;
 * `audit_events`.
 
-| Method | Path                           | Назначение                                       | Ожидаемые controlled outcomes                                                                                                                                                              | Демонстрирует                                                                                                                         |
-| ------ | ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST` | `/api/v1/access-requests`      | Отправить synthetic access-control request.      | `COMPLETED`, `WAITING_FOR_APPROVAL`, `NEEDS_USER_INPUT`, `NEEDS_MANUAL_REVIEW`, `REJECTED`, `FAILED_VALIDATION`, provider/tool failures, когда boundaries безопасно завершаются с ошибкой. | Employee/system/access-policy checks, backend tool validation, policy gating и high-risk access approval.                             |
-| `POST` | `/api/v1/procurement-requests` | Отправить synthetic spend/vendor/budget request. | `COMPLETED`, `WAITING_FOR_APPROVAL`, `NEEDS_USER_INPUT`, `NEEDS_MANUAL_REVIEW`, `REJECTED`, `FAILED_VALIDATION`, provider/tool failures, когда boundaries безопасно завершаются с ошибкой. | Requester/vendor/catalog/budget/duplicate checks, draft purchase request control и approval для higher-risk spend.                    |
-| `POST` | `/api/v1/maintenance-requests` | Отправить synthetic maintenance-lite request.    | `COMPLETED`, `WAITING_FOR_APPROVAL`, `NEEDS_USER_INPUT`, `NEEDS_MANUAL_REVIEW`, `REJECTED`, `FAILED_VALIDATION`, provider/tool failures, когда boundaries безопасно завершаются с ошибкой. | Requester/asset/severity/safety checks, canonical maintenance severity validation, draft work order control и high-severity approval. |
+| Метод | Путь | Назначение | Проверки и контролируемые действия |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/access-requests` | Отправить демонстрационный запрос доступа. | Проверки сотрудника, системы и правил доступа; серверная валидация инструментов; допуск по политике выполнения и согласование доступа высокого риска. |
+| `POST` | `/api/v1/procurement-requests` | Отправить демонстрационный запрос на закупку. | Проверки инициатора, поставщика, каталога, бюджета и дубликатов; создание черновика закупки и согласование расходов повышенного риска. |
+| `POST` | `/api/v1/maintenance-requests` | Отправить демонстрационную заявку на обслуживание. | Проверки инициатора, актива, критичности и безопасности; валидация допустимой критичности; создание черновика заказ-наряда и согласование высокой критичности. |
 
-Compact access submit shape:
+Для всех трёх маршрутов предусмотрены результаты `COMPLETED`, `WAITING_FOR_APPROVAL`, `NEEDS_USER_INPUT`, `NEEDS_MANUAL_REVIEW`, `REJECTED` и `FAILED_VALIDATION`. Ошибки на границах поставщика модели или инструмента завершаются контролируемыми статусами `FAILED_PROVIDER` или `FAILED_TOOL`.
+
+Краткий пример запроса доступа:
 
 ```json
 {
@@ -72,17 +74,17 @@ Compact access submit shape:
 }
 ```
 
-Текущие submit schemas являются workflow-specific. Они не принимают `provider`, `model` или похожие model-selection fields.
+У каждого сценария своя схема отправки. Поля `provider`, `model` и подобные параметры выбора модели не принимаются.
 
-Synthetic Procurement contract принимает только canonical currency `USD`; другое значение отклоняется request validation с HTTP 422 до запуска workflow.
+Демонстрационный контракт закупки принимает только валюту `USD`. Иное значение отклоняется при валидации запроса с HTTP 422 до запуска сценария.
 
-## 5. Approval endpoint
+## 5. Принятие решения по согласованию
 
-| Method | Path                                      | Назначение                                             |
-| ------ | ----------------------------------------- | ------------------------------------------------------ |
-| `POST` | `/api/v1/approvals/{approval_id}/resolve` | Resolve pending approval для run, ожидающего approval. |
+| Метод | Путь | Назначение |
+| --- | --- | --- |
+| `POST` | `/api/v1/approvals/{approval_id}/resolve` | Принять решение по согласованию для запуска, ожидающего разрешения. |
 
-Request body:
+Тело запроса:
 
 ```json
 {
@@ -93,96 +95,96 @@ Request body:
 }
 ```
 
-Поддерживаемые terminal decisions:
+Поддерживаемые окончательные решения:
 
-| Decision    | Effect                                                                                                         |
-| ----------- | -------------------------------------------------------------------------------------------------------------- |
-| `APPROVED`  | Возобновляет waiting run и выполняет waiting state-changing draft tool через authorized backend tool boundary. |
-| `REJECTED`  | Отклоняет run и не создаёт draft.                                                                              |
-| `CANCELLED` | Отклоняет run и не создаёт draft.                                                                              |
+| Решение | Действие |
+| --- | --- |
+| `APPROVED` | Возобновляет ожидающий запуск и выполняет отложенный инструмент создания черновика через разрешённую серверную границу. |
+| `REJECTED` | Отклоняет запуск без создания черновика. |
+| `CANCELLED` | Отклоняет запуск без создания черновика. |
 
-`PENDING` не является decision. Request schema отклоняет его с HTTP 422. Поле `decided_by` обязательно и не может быть empty или whitespace-only; такое значение также возвращает HTTP 422.
+`PENDING` не является решением и отклоняется схемой запроса с HTTP 422. Поле `decided_by` обязательно: пустая строка или строка из пробелов также приводит к HTTP 422. Это демонстрационная подпись принявшего решение, а не подтверждённая аутентификацией личность или проверка RBAC.
 
-Когда существует required approval, draft action не запускается и draft output не создаётся до approval resolution. Rejected или cancelled approval не создаёт draft. Repository conditional update атомарно назначает одного owner перехода из `PENDING` в terminal status. Concurrent, repeated, stale или run-mismatched loser получает HTTP `409` с `detail.code == "state_conflict"` до второго action-tool execution, run rewrite, terminal ToolCall rewrite или противоречивого terminal audit event.
+При обязательном согласовании действие создания черновика не запускается и черновик не появляется до принятия решения. Отклонение или отмена согласования не создаёт черновик. Условное обновление репозитория атомарно предоставляет право перехода из `PENDING` в окончательный статус одному обработчику. Конкурирующий, повторный, устаревший запрос или запрос с чужим `run_id`, которому этот переход недоступен, получает HTTP `409` с `detail.code == "state_conflict"`. Это происходит до повторного выполнения инструмента действия, перезаписи запуска, перезаписи окончательного состояния `ToolCall` или создания противоречивого итогового события аудита.
 
-Текущая approval policy включает `AUTO_APPROVE` safety floor: `AUTO_APPROVE` не обходит high-risk, critical-risk или default-approval state-changing controls. High-risk/default-approval state-changing actions всё равно требуют approval, а critical-risk actions переводятся в manual review.
+Режим `AUTO_APPROVE` сохраняет минимальные ограничения безопасности: он не обходит контроль изменяющих состояние действий высокого и критического риска или действий, по умолчанию требующих согласования. Действия высокого риска и действия с обязательным согласованием по умолчанию всё равно требуют разрешения; критический риск направляется на ручную проверку.
 
-## 6. Run read endpoints
+## 6. Чтение данных запуска
 
-| Method | Path                                 | Назначение                                                                  |
-| ------ | ------------------------------------ | --------------------------------------------------------------------------- |
-| `GET`  | `/api/v1/runs/{run_id}`              | Прочитать run detail вместе с related approvals, tool calls и audit events. |
-| `GET`  | `/api/v1/runs/{run_id}/tool-calls`   | Прочитать tool calls для одного run.                                        |
-| `GET`  | `/api/v1/runs/{run_id}/approvals`    | Прочитать approvals для одного run.                                         |
-| `GET`  | `/api/v1/runs/{run_id}/audit-events` | Прочитать audit events для одного run.                                      |
+| Метод | Путь | Назначение |
+| --- | --- | --- |
+| `GET` | `/api/v1/runs/{run_id}` | Прочитать сведения о запуске вместе с согласованиями, вызовами инструментов и событиями аудита. |
+| `GET` | `/api/v1/runs/{run_id}/tool-calls` | Прочитать вызовы инструментов одного запуска. |
+| `GET` | `/api/v1/runs/{run_id}/approvals` | Прочитать согласования одного запуска. |
+| `GET` | `/api/v1/runs/{run_id}/audit-events` | Прочитать события аудита одного запуска. |
 
-Read visibility является run-scoped. Backend сейчас не раскрывает global run listing, global approval queue и global audit search. Frontend known-run index — это browser-local convenience для demo session. Он не является backend truth и не заменяет persisted run-scoped records.
+Чтение ограничено выбранным запуском. Сервер пока не предоставляет общий список запусков, общую очередь согласований и глобальный поиск аудита. Индекс известных запусков в браузере нужен для удобства демонстрационной сессии; он не является серверным источником истины и не заменяет сохранённые записи отдельных запусков.
 
-Unknown run IDs возвращают HTTP 404 на run detail и related-record endpoints.
+Неизвестный `run_id` возвращает HTTP 404 как при чтении сведений о запуске, так и на маршрутах связанных записей.
 
-## 7. Controlled outcomes vs HTTP errors
+## 7. Контролируемые результаты и ошибки HTTP
 
-Controlled statuses — это gateway outcomes, принадлежащие backend. Они описывают, что решил gateway после получения и обработки валидного request.
+Контролируемые статусы принадлежат серверной части и описывают решение шлюза после обработки корректного запроса.
 
-| Run status             | Значение                                                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| `COMPLETED`            | Run достиг принятого final state, обычно с synthetic draft output.                                   |
-| `WAITING_FOR_APPROVAL` | Required approval находится в pending, а draft action ещё не выполнен.                               |
-| `NEEDS_USER_INPUT`     | Отсутствуют обязательные request fields или clarifications.                                          |
-| `NEEDS_MANUAL_REVIEW`  | Policy или synthetic data checks требуют manual review.                                              |
-| `REJECTED`             | Policy или approval отклонили run.                                                                   |
-| `FAILED_VALIDATION`    | Provider output, request type, domain template или proposed tool names не прошли backend validation. |
-| `FAILED_TOOL`          | Tool boundary или draft action безопасно завершились с ошибкой.                                      |
-| `FAILED_PROVIDER`      | Provider boundary безопасно завершился с ошибкой.                                                    |
+| Статус запуска | Значение |
+| --- | --- |
+| `COMPLETED` | Запуск достиг допустимого конечного состояния, обычно с демонстрационным черновиком. |
+| `WAITING_FOR_APPROVAL` | Обязательное согласование ожидает решения; действие создания черновика ещё не выполнено. |
+| `NEEDS_USER_INPUT` | Не хватает обязательных полей запроса или уточнений. |
+| `NEEDS_MANUAL_REVIEW` | Политика выполнения или проверки синтетических данных требуют ручной проверки. |
+| `REJECTED` | Политика выполнения или решение по согласованию отклонили запуск. |
+| `FAILED_VALIDATION` | Ответ поставщика модели, тип запроса, доменный шаблон или предложенные имена инструментов не прошли серверную валидацию. |
+| `FAILED_TOOL` | Вызов инструмента или действие создания черновика завершились контролируемой ошибкой. |
+| `FAILED_PROVIDER` | Обращение к поставщику модели завершилось контролируемой ошибкой. |
 
-Эти statuses могут возвращаться с HTTP 200, когда сам API request был well-formed и gateway успешно его обработал.
+Эти статусы могут возвращаться с HTTP 200: запрос API был корректен, а шлюз успешно обработал его, в том числе остановив дальнейшее выполнение.
 
-HTTP errors зарезервированы для API-level failures:
+Ошибки HTTP обозначают ошибки уровня API:
 
-| HTTP status | Использование                                                                                               |
-| ----------- | ----------------------------------------------------------------------------------------------------------- |
-| `422`       | Malformed или invalid API request body, включая forbidden extra fields, non-USD procurement currency, blank `decided_by` или `PENDING` как approval decision. |
-| `404`       | Missing run или approval.                                                                                   |
-| `409`       | State conflict, например mismatched run/approval, non-waiting run или repeated approval resolution.         |
-| `500`       | Unexpected internal API error с generic safe message.                                                       |
+| Статус HTTP | Использование |
+| --- | --- |
+| `422` | Некорректное тело запроса, в том числе запрещённые дополнительные поля, валюта закупки не `USD`, пустой `decided_by` или `PENDING` в качестве решения по согласованию. |
+| `404` | Запуск или согласование не найдены. |
+| `409` | Конфликт состояния: например, несоответствие запуска и согласования, запуск уже не ожидает решения или решение принимается повторно. |
+| `500` | Непредвиденная внутренняя ошибка API с безопасным общим сообщением. |
 
-## 8. Public projection и redaction
+## 8. Публичные данные и маскирование
 
-Public API responses используют safe projection поверх internal records:
+Ответы API используют безопасное публичное представление внутренних записей:
 
-* tool input и output payloads проходят public redaction перед API responses;
-* approval free-text fields, такие как `summary`, `reason`, `decided_by` и `decision_comment`, проходят redaction перед API responses;
-* audit event payloads создаются с recursive redaction до persistence и затем раскрываются как run-scoped audit payloads;
-* redaction покрывает sensitive keys и high-confidence sensitive-looking values, включая markers для token, password, secret, API key, authorization и quoted/serialized credential assignments;
-* persisted records могут содержать internal details, которые public DTOs напрямую не раскрывают;
-* redaction основан на bounded markers и value patterns; benign explanatory colon-bearing prose само по себе не считается secret. Это не полноценный security, privacy, DLP или classification product.
+* во входных и выходных данных инструментов чувствительные значения маскируются перед возвратом через API;
+* свободные текстовые поля согласования `summary`, `reason`, `decided_by` и `decision_comment` также проходят такую обработку;
+* данные событий аудита проходят рекурсивное маскирование до сохранения и затем доступны в пределах одного запуска;
+* проверяются чувствительные ключи и значения с достаточно надёжными признаками секретов: токены, пароли, секреты, ключи API, авторизационные данные и присваивания учётных данных в кавычках или сериализованном виде;
+* сохранённые записи могут содержать внутренние сведения, не раскрываемые публичными DTO;
+* обработка ограничена заданными маркерами и шаблонами значений. Обычный пояснительный текст с двоеточием сам по себе не считается секретом. Это не полноценная система безопасности, защиты персональных данных, DLP или классификации информации.
 
-## 9. Назначение eval runner
+## 9. Как устроены приёмочные проверки
 
-`scripts/run_eval.py` запускает deterministic API acceptance suite. Он создаёт in-process FastAPI app для каждого case, использует isolated temporary SQLite databases, устанавливает deterministic mock/static provider behavior и проверяет public API endpoints.
+`scripts/run_eval.py` запускает детерминированный набор приёмочных проверок API. Для каждого случая создаются приложение FastAPI внутри процесса и отдельная временная база SQLite, а ответы поставщика модели подменяются детерминированной заглушкой или заданным ответом. Проверки обращаются к публичным маршрутам API.
 
-Eval runner проверяет gateway lifecycle behavior:
+Проверяется жизненный цикл шлюза:
 
-* submit endpoints возвращают expected controlled statuses;
-* approval-required cases не создают draft до approval;
-* approval resolution достигает expected final status;
-* repeated approval resolution даёт conflict;
-* run-scoped read endpoints возвращают consistent related records;
-* expected audit events и reason codes присутствуют;
-* final summaries присутствуют и избегают очевидных unsafe terms;
-* failed-validation cases не сохраняют tool calls.
+* маршруты отправки возвращают ожидаемые контролируемые статусы;
+* случаи с обязательным согласованием не создают черновик до разрешения;
+* принятие решения приводит к ожидаемому конечному статусу;
+* повторное решение вызывает конфликт;
+* маршруты чтения запуска возвращают согласованные связанные записи;
+* присутствуют ожидаемые события аудита и коды причин;
+* итоговые сводки присутствуют и не содержат очевидных опасных маркеров;
+* при ошибке валидации вызовы инструментов не сохраняются.
 
-Он не выполняет real provider calls, network calls и real enterprise connector calls.
+Реальные поставщики моделей, внешняя сеть и корпоративные системы не вызываются.
 
 ```mermaid
-flowchart LR
-    Case["Eval case<br/>deterministic input"]
-    Client["FastAPI test client"]
-    API["/api/v1 endpoint"]
-    Runtime["Application runtime"]
-    Records["Persisted records<br/>run / tool calls / approvals / audit"]
-    Assertions["Assertions<br/>status<br/>approval<br/>draft/no-draft<br/>tool calls<br/>audit events"]
-    Result["Pass / fail result"]
+flowchart TB
+    Case["Проверочный случай<br/>детерминированные входные данные"]
+    Client["Тестовый клиент FastAPI"]
+    API["Маршрут /api/v1"]
+    Runtime["Прикладная обработка"]
+    Records["Сохранённые записи<br/>запуск / инструменты / согласования / аудит"]
+    Assertions["Проверки<br/>статус / согласование<br/>наличие или отсутствие черновика<br/>инструменты / аудит"]
+    Result["Успех или ошибка проверки"]
 
     Case --> Client
     Client --> API
@@ -191,51 +193,51 @@ flowchart LR
     Records --> Assertions
     Assertions --> Result
 
-    Provider["Mock/static provider path"]
+    Provider["Заглушка или заданный ответ поставщика модели"]
     Provider --> Runtime
 
-    NonGoals["Not an LLM benchmark<br/>Not real provider smoke<br/>Not production monitoring"]
-    NonGoals -. "explicitly out of scope" .-> Case
+    NonGoals["Без сравнения LLM<br/>Без реального вызова LLM<br/>Без промышленного мониторинга"]
+    NonGoals -. "За пределами проверки" .-> Case
 ```
 
-## 10. Acceptance matrix
+## 10. Матрица приёмочных проверок
 
-Текущий deterministic suite содержит 21 case.
+Текущий детерминированный набор содержит 21 случай. Таблица описывает ожидаемые результаты, а не отчёт о последнем запуске проверок.
 
-| Workflow    | Case ID                                                  | Initial status         | Approval decision | Final status          | Focus                                                                       |
-| ----------- | -------------------------------------------------------- | ---------------------- | ----------------- | --------------------- | --------------------------------------------------------------------------- |
-| Access      | `access_completed`                                       | `COMPLETED`            | None              | `COMPLETED`           | Standard access request создаёт synthetic draft.                            |
-| Access      | `access_approval_approved`                               | `WAITING_FOR_APPROVAL` | `APPROVED`        | `COMPLETED`           | High-risk access ожидает, затем завершается после approval.                 |
-| Access      | `access_approval_rejected`                               | `WAITING_FOR_APPROVAL` | `REJECTED`        | `REJECTED`            | High-risk access отклоняется после denial.                                  |
-| Access      | `access_missing_input`                                   | `NEEDS_USER_INPUT`     | None              | `NEEDS_USER_INPUT`    | Missing employee/duration input останавливает процесс для user input.       |
-| Access      | `access_manual_review_unknown_system`                    | `NEEDS_MANUAL_REVIEW`  | None              | `NEEDS_MANUAL_REVIEW` | Unknown system останавливает процесс для manual review.                     |
-| Access      | `access_rejected_forbidden`                              | `REJECTED`             | None              | `REJECTED`            | Forbidden intern admin access отклоняется без draft.                        |
-| Access      | `access_failed_validation_unknown_tool`                  | `FAILED_VALIDATION`    | None              | `FAILED_VALIDATION`   | Unknown access tool proposal не проходит backend validation.                |
-| Procurement | `procurement_completed`                                  | `COMPLETED`            | None              | `COMPLETED`           | Standard procurement request создаёт synthetic draft.                       |
-| Procurement | `procurement_approval_approved`                          | `WAITING_FOR_APPROVAL` | `APPROVED`        | `COMPLETED`           | High-value procurement ожидает, затем завершается после approval.           |
-| Procurement | `procurement_approval_rejected`                          | `WAITING_FOR_APPROVAL` | `REJECTED`        | `REJECTED`            | High-value procurement отклоняется после denial.                            |
-| Procurement | `procurement_missing_input`                              | `NEEDS_USER_INPUT`     | None              | `NEEDS_USER_INPUT`    | Missing requester/item/quantity input останавливает процесс для user input. |
-| Procurement | `procurement_manual_review_total_mismatch_or_budget`     | `NEEDS_MANUAL_REVIEW`  | None              | `NEEDS_MANUAL_REVIEW` | Total mismatch или budget issue останавливает процесс для manual review.    |
-| Procurement | `procurement_rejected_blocked_vendor_or_restricted_item` | `REJECTED`             | None              | `REJECTED`            | Blocked vendor или restricted item отклоняется без draft.                   |
-| Procurement | `procurement_failed_validation_unknown_tool`             | `FAILED_VALIDATION`    | None              | `FAILED_VALIDATION`   | Unknown procurement tool proposal не проходит backend validation.           |
-| Maintenance | `maintenance_completed`                                  | `COMPLETED`            | None              | `COMPLETED`           | Standard maintenance request создаёт synthetic draft.                       |
-| Maintenance | `maintenance_approval_approved`                          | `WAITING_FOR_APPROVAL` | `APPROVED`        | `COMPLETED`           | High-severity maintenance ожидает, затем завершается после approval.        |
-| Maintenance | `maintenance_approval_rejected`                          | `WAITING_FOR_APPROVAL` | `REJECTED`        | `REJECTED`            | High-severity maintenance отклоняется после denial.                         |
-| Maintenance | `maintenance_missing_input`                              | `NEEDS_USER_INPUT`     | None              | `NEEDS_USER_INPUT`    | Missing requester/asset input останавливает процесс для user input.         |
-| Maintenance | `maintenance_manual_review_safety_or_critical_asset`     | `NEEDS_MANUAL_REVIEW`  | None              | `NEEDS_MANUAL_REVIEW` | Safety или critical asset concern останавливает процесс для manual review.  |
-| Maintenance | `maintenance_rejected_forbidden`                         | `REJECTED`             | None              | `REJECTED`            | Forbidden maintenance instruction отклоняется без draft.                    |
-| Maintenance | `maintenance_failed_validation_unknown_tool`             | `FAILED_VALIDATION`    | None              | `FAILED_VALIDATION`   | Unknown maintenance tool proposal не проходит backend validation.           |
+| Сценарий | ID проверки | Начальный статус | Решение | Конечный статус | Что проверяется |
+| --- | --- | --- | --- | --- | --- |
+| Доступ | `access_completed` | `COMPLETED` | Нет | `COMPLETED` | Обычный запрос доступа создаёт демонстрационный черновик. |
+| Доступ | `access_approval_approved` | `WAITING_FOR_APPROVAL` | `APPROVED` | `COMPLETED` | Доступ высокого риска ожидает решения и завершается после согласования. |
+| Доступ | `access_approval_rejected` | `WAITING_FOR_APPROVAL` | `REJECTED` | `REJECTED` | Доступ высокого риска отклоняется после отказа в согласовании. |
+| Доступ | `access_missing_input` | `NEEDS_USER_INPUT` | Нет | `NEEDS_USER_INPUT` | Нет данных сотрудника или срока: требуются данные пользователя. |
+| Доступ | `access_manual_review_unknown_system` | `NEEDS_MANUAL_REVIEW` | Нет | `NEEDS_MANUAL_REVIEW` | Неизвестная система требует ручной проверки. |
+| Доступ | `access_rejected_forbidden` | `REJECTED` | Нет | `REJECTED` | Запрещённый административный доступ стажёра отклоняется без черновика. |
+| Доступ | `access_failed_validation_unknown_tool` | `FAILED_VALIDATION` | Нет | `FAILED_VALIDATION` | Предложение неизвестного инструмента доступа не проходит серверную валидацию. |
+| Закупка | `procurement_completed` | `COMPLETED` | Нет | `COMPLETED` | Обычный запрос на закупку создаёт демонстрационный черновик. |
+| Закупка | `procurement_approval_approved` | `WAITING_FOR_APPROVAL` | `APPROVED` | `COMPLETED` | Закупка на большую сумму ожидает решения и завершается после согласования. |
+| Закупка | `procurement_approval_rejected` | `WAITING_FOR_APPROVAL` | `REJECTED` | `REJECTED` | Закупка на большую сумму отклоняется после отказа в согласовании. |
+| Закупка | `procurement_missing_input` | `NEEDS_USER_INPUT` | Нет | `NEEDS_USER_INPUT` | Нет данных инициатора, позиции или количества: требуются данные пользователя. |
+| Закупка | `procurement_manual_review_total_mismatch_or_budget` | `NEEDS_MANUAL_REVIEW` | Нет | `NEEDS_MANUAL_REVIEW` | Несоответствие суммы или проблема бюджета требуют ручной проверки. |
+| Закупка | `procurement_rejected_blocked_vendor_or_restricted_item` | `REJECTED` | Нет | `REJECTED` | Заблокированный поставщик или запрещённая позиция отклоняются без черновика. |
+| Закупка | `procurement_failed_validation_unknown_tool` | `FAILED_VALIDATION` | Нет | `FAILED_VALIDATION` | Предложение неизвестного инструмента закупки не проходит серверную валидацию. |
+| Обслуживание | `maintenance_completed` | `COMPLETED` | Нет | `COMPLETED` | Обычная заявка на обслуживание создаёт демонстрационный черновик. |
+| Обслуживание | `maintenance_approval_approved` | `WAITING_FOR_APPROVAL` | `APPROVED` | `COMPLETED` | Высокая критичность требует ожидания и завершается после согласования. |
+| Обслуживание | `maintenance_approval_rejected` | `WAITING_FOR_APPROVAL` | `REJECTED` | `REJECTED` | Заявка высокой критичности отклоняется после отказа в согласовании. |
+| Обслуживание | `maintenance_missing_input` | `NEEDS_USER_INPUT` | Нет | `NEEDS_USER_INPUT` | Нет данных инициатора или актива: требуются данные пользователя. |
+| Обслуживание | `maintenance_manual_review_safety_or_critical_asset` | `NEEDS_MANUAL_REVIEW` | Нет | `NEEDS_MANUAL_REVIEW` | Угроза безопасности или критически важный актив требуют ручной проверки. |
+| Обслуживание | `maintenance_rejected_forbidden` | `REJECTED` | Нет | `REJECTED` | Запрещённая инструкция обслуживания отклоняется без черновика. |
+| Обслуживание | `maintenance_failed_validation_unknown_tool` | `FAILED_VALIDATION` | Нет | `FAILED_VALIDATION` | Предложение неизвестного инструмента обслуживания не проходит серверную валидацию. |
 
-## 11. Запуск validation
+## 11. Запуск проверок
 
-Запустить deterministic eval suite:
+Детерминированный набор приёмочных проверок:
 
 ```bash
 uv run python scripts/run_eval.py
 uv run python scripts/run_eval.py --format json
 ```
 
-Запустить более широкую backend validation:
+Более широкие проверки серверной части:
 
 ```bash
 uv run pytest
@@ -244,7 +246,7 @@ uv run pyright
 git diff --check
 ```
 
-Frontend validation отделена от Python backend suite. Когда frontend changes входят в scope, выполнить:
+Веб-интерфейс проверяется отдельно от серверной части на Python. Если меняется код веб-интерфейса, выполните:
 
 ```bash
 cd frontend
@@ -252,30 +254,23 @@ npm run typecheck
 npm run build
 ```
 
-## 12. Чего evals не доказывают
+## 12. Чего приёмочные проверки не доказывают
 
-Eval suite не доказывает:
+Набор проверок не подтверждает:
 
-* production security;
-* real provider quality;
-* real enterprise connector behavior;
-* authentication, RBAC или tenant behavior;
-* scalability или load behavior;
-* full UI end-to-end coverage;
-* model benchmark performance;
-* production monitoring readiness.
+* безопасность промышленной эксплуатации;
+* качество реального поставщика модели;
+* поведение реальных корпоративных интеграций;
+* аутентификацию, RBAC или изоляцию арендаторов;
+* масштабируемость или поведение под нагрузкой;
+* полное сквозное тестирование интерфейса;
+* качество модели в сравнительных испытаниях;
+* готовность промышленного мониторинга.
 
 ## 13. Связанные документы
 
-Related documents:
-
-* [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) - current prototype scope,
-  implemented workflows, API status, frontend status и intentional non-goals.
-* [ARCHITECTURE.md](ARCHITECTURE.md) - system architecture, request lifecycle,
-  boundaries, approval model, failure model и limitations.
-* [PROJECT_MAP.md](PROJECT_MAP.md) - repository structure, package ownership,
-  API/eval entrypoints и validation map.
-* [DEMO_WALKTHROUGH.md](DEMO_WALKTHROUGH.md) - local demo walkthrough для
-  backend, frontend и eval runner.
-* [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) - setup, validation и safe
-  development workflow.
+* [Контекст проекта](PROJECT_CONTEXT.md) — границы прототипа, реализованные сценарии, состояние API и интерфейса, явные ограничения.
+* [Архитектура](ARCHITECTURE.md) — устройство системы, жизненный цикл запроса, границы ответственности, согласования, ошибки и ограничения.
+* [Карта проекта](PROJECT_MAP.md) — структура репозитория, владельцы пакетов, точки входа API и проверок.
+* [Демонстрационный сценарий](DEMO_WALKTHROUGH.md) — локальный показ серверной части, интерфейса и приёмочных проверок.
+* [Руководство разработчика](DEVELOPMENT_GUIDE.md) — установка, проверки и порядок безопасной разработки.

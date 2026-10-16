@@ -1,38 +1,38 @@
-# Демо walkthrough
+# Демонстрационный сценарий
 
-## 1. Назначение demo
+## 1. Цель демонстрации
 
-Этот walkthrough показывает, как запустить локальный demo Enterprise AI Tool Gateway и проверить контролируемый жизненный цикл трёх синтетических workflows.
+Это руководство помогает запустить Enterprise AI Tool Gateway локально и показать контролируемый жизненный цикл трёх сценариев на синтетических данных.
 
-После прохождения walkthrough reviewer должен понимать ключевую control model:
+Основная модель управления:
 
 ```text
-LLM proposes.
-Backend validates.
-Tools execute through controlled boundaries.
-Approval gates risky actions.
-Audit records lifecycle evidence.
-Frontend displays the controlled lifecycle over /api/v1.
+LLM предлагает решение.
+Серверная часть проверяет его.
+Инструменты выполняются через контролируемые границы.
+Согласование ограничивает рискованные действия.
+Журнал аудита сохраняет события жизненного цикла.
+Веб-интерфейс показывает этот процесс через /api/v1.
 ```
 
-Demo является локальным и синтетическим. Оно демонстрирует backend ownership для validation, tool boundaries, policy checks, approvals, audit records и public API readback. Это не production SaaS и не интеграция с реальными enterprise systems.
+Демонстрация показывает ответственность сервера за валидацию, вызовы инструментов, политику выполнения, согласования, аудит и чтение результатов через публичный API. Используются локальное приложение и синтетические данные; интеграций с реальными корпоративными системами нет.
 
 ```mermaid
 flowchart TB
-    Start["Start local demo<br/>run_demo.cmd or manual commands"]
-    Dashboard["Dashboard<br/>API status / provider mock / workflows"]
-    Workflows["Workflow catalog"]
+    Start["Запуск локальной демонстрации<br/>run_demo.cmd или команды вручную"]
+    Dashboard["Обзор<br/>состояние API / заглушка mock / сценарии"]
+    Workflows["Каталог сценариев"]
 
-    Access["Access Request<br/>happy path"]
-    Procurement["Procurement Request<br/>approval path"]
-    ProcurementApproval["Run Approvals<br/>approve / reject / cancel"]
-    Maintenance["Maintenance Request<br/>default safe path"]
+    Access["Запрос доступа<br/>успешный путь"]
+    Procurement["Запрос на закупку<br/>путь с согласованием"]
+    ProcurementApproval["Согласования запуска<br/>согласовать / отклонить / отменить"]
+    Maintenance["Заявка на обслуживание<br/>безопасный путь по умолчанию"]
 
-    RunDetail["Run Detail<br/>status and final summary"]
-    ToolCalls["Tool Calls<br/>controlled tool execution"]
-    AuditTrail["Audit Trail<br/>lifecycle evidence"]
+    RunDetail["Сведения о запуске<br/>статус и итоговая сводка"]
+    ToolCalls["Вызовы инструментов<br/>контролируемое выполнение"]
+    AuditTrail["Журнал аудита<br/>события жизненного цикла"]
 
-    Evals["Eval runner<br/>21-case deterministic acceptance suite"]
+    Evals["Приёмочные проверки<br/>21 детерминированный случай"]
 
     Start --> Dashboard
     Dashboard --> Workflows
@@ -49,22 +49,21 @@ flowchart TB
     RunDetail --> ToolCalls
     RunDetail --> AuditTrail
 
-    Dashboard --> Evals
+    Dashboard -. "Отдельный запуск из терминала" .-> Evals
 ```
 
 ## 2. Перед началом
 
-Prerequisites:
+Потребуются:
 
-* локальная checkout-копия этого repository;
-* Python и `uv` для backend;
-* Node.js и npm для frontend;
-* установленные frontend dependencies, если это первый запуск;
-* real provider credentials для default demo не требуются.
+* локальная копия репозитория;
+* Python ≥3.14 и `uv` для серверной части;
+* Node.js и npm для веб-интерфейса;
+* установленные зависимости веб-интерфейса, если это первый запуск.
 
-Default provider mode — `mock`. Real-provider credentials не нужны для API, frontend или eval walkthrough.
+По умолчанию используется заглушка `mock`. Ключи реального поставщика модели не требуются для API, веб-интерфейса и приёмочных проверок.
 
-Если frontend dependencies отсутствуют, установите их один раз:
+Если зависимости веб-интерфейса отсутствуют, установите их один раз:
 
 ```bash
 cd frontend
@@ -78,80 +77,81 @@ cd ..
 run_demo.cmd
 ```
 
-Runner не устанавливает dependencies автоматически. Он запускает оба локальных сервиса, ожидает backend health, проверяет frontend marker и API proxy, затем открывает dashboard. Backend/frontend logs видны в одном окне и сохраняются в per-instance files. `Ctrl+C` запускает штатную остановку; закрытие окна завершает всё дерево процессов этого Runner. `Q` — дополнительный способ остановки. Уже готовые services переиспользуются без ownership. Используйте manual commands ниже, когда удобнее работать в отдельных терминалах.
+Программа запуска не устанавливает зависимости автоматически. Она запускает оба локальных сервиса, ожидает готовности серверной части, проверяет маркер веб-интерфейса и проксирование API, затем открывает обзор. Логи обоих сервисов видны в одном окне и сохраняются в файлах отдельного экземпляра. `Ctrl+C` запускает штатную остановку; закрытие окна завершает всё дерево процессов этого экземпляра. `Q` — дополнительный способ остановки. Уже готовые сервисы переиспользуются: программа не становится их владельцем и не останавливает их при своём завершении. Для работы в отдельных терминалах используйте команды ниже.
 
-## 3. Запуск backend
+## 3. Запуск серверной части
 
-Из корня repository запустите FastAPI backend:
+Из корня репозитория запустите FastAPI:
 
 ```bash
 uv run uvicorn enterprise_ai_tool_gateway.api.http.app:app --reload
 ```
 
-Local API версионирован под `/api/v1`.
+Версия локального API доступна по префиксу `/api/v1`.
 
-Проверьте backend health и capability metadata:
+Проверьте доступность и сведения о возможностях:
 
 ```text
 GET http://127.0.0.1:8000/api/v1/health
 GET http://127.0.0.1:8000/api/v1/capabilities
 ```
 
-Ожидаемый health response:
+Ожидаемый ответ проверки доступности:
 
 ```json
 {"status": "ok"}
 ```
 
-Backend root URL может возвращать 404:
+Корневой URL сервера может возвращать 404:
 
 ```text
 GET http://127.0.0.1:8000/
 ```
 
-Это нормально. Backend не отдаёт frontend root page.
+Это ожидаемо: серверная часть не отдаёт главную страницу веб-интерфейса.
 
-## 4. Запуск frontend
+## 4. Запуск веб-интерфейса
 
-Во втором терминале запустите Vite frontend:
+Во втором терминале запустите Vite:
 
 ```bash
 cd frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Откройте основной UI:
+Откройте веб-интерфейс:
 
 ```text
 http://127.0.0.1:5173/dashboard
 ```
 
-Frontend API client по умолчанию вызывает `/api/v1`. Vite проксирует `/api` на backend по адресу `http://localhost:8000`, поэтому browser requests к `/api/v1/...` попадают в FastAPI endpoints `/api/v1`.
+Клиент API по умолчанию обращается к `/api/v1`. Vite проксирует `/api` на `http://localhost:8000`, поэтому запросы браузера к `/api/v1/...` достигают маршрутов FastAPI `/api/v1`.
 
-## 5. Первый экран: Dashboard и Settings
+## 5. Первые экраны: обзор и настройки
 
-Fresh browser session открывается на русском языке. Переключите `RU → EN → RU` через locale control без reload и убедитесь, что текущие form values, Open Run input, run/approval selection и last outcome сохраняются. Названия labels ниже даны в английском варианте для однозначной ссылки; RU/EN меняет только presentation, а raw JSON, UUIDs, JSON/request keys, canonical enum/status values и backend-provided text остаются исходными.
+Если язык ещё не сохранён в браузере, интерфейс открывается на русском. Через переключатель «Язык интерфейса» выполните `RU → EN → RU` без перезагрузки страницы. Значения форм, поле открытия запуска, выбранные запуск и согласование, а также последний результат должны сохраниться.
 
-На `/dashboard` проверьте основные индикаторы локального demo:
+Далее используются русские названия интерфейса. Для сопоставления с английскими скриншотами в README: «Обзор» — Dashboard, «Сведения о запуске» — Run Detail, «Настройки» — Settings, «Результат отправки» — Submit Result, «Ручная проверка» — Manual review. Видео в README записано на русском. Переключатель меняет представление интерфейса; исходные JSON, UUID, ключи запросов, значения перечислений и статусов, а также текст, полученный от серверной части, остаются без перевода.
 
-* `API Health` имеет значение `ok`;
-* `Provider Mode` имеет значение `mock`;
-* `Model Selection` имеет значение `disabled`;
-* `Available Workflows` включает три workflow, поддерживаемые backend;
-* `Known Runs` и `Pending Approvals` относятся только к run IDs, известным в этой browser session.
+На `/dashboard` проверьте:
 
-Откройте `/settings` и проверьте `Settings / API Status`:
+* «Состояние API» — `ok`;
+* «Режим провайдера» — `mock`;
+* «Выбор модели» — «выключен»;
+* «Доступные сценарии» — три сценария, поддерживаемых сервером;
+* «Известные запуски» и «Ожидают согласования» учитывают только ID запусков, известных этой сессии браузера.
 
-* `API base URL` должен быть `/api/v1`, если он не переопределён через environment;
-* `Health` должен быть `ok`;
-* `Provider mode` должен быть `mock`;
-* `Model selection` должен быть `disabled`;
-* capabilities JSON должен показывать `model_selection.enabled: false`,
-  `active_profile: "mock"` и `available_profiles: ["mock"]`.
+Откройте `/settings`, страницу «Настройки / состояние API», и проверьте:
 
-UI — это local operations console поверх backend API. Он не выполняет tools, не оценивает policy, не вызывает providers напрямую и не читает SQLite database.
+* «Базовый URL API» — `/api/v1`, если адрес не переопределён переменной окружения;
+* «Состояние» — `ok`;
+* «Режим провайдера» — `mock`;
+* «Выбор модели» — «выключен»;
+* в JSON возможностей указаны `model_selection.enabled: false`, `active_profile: "mock"` и `available_profiles: ["mock"]`.
 
-## 6. Scenario A — Access happy path
+Веб-интерфейс — локальная консоль работы с серверным API. Он не выполняет инструменты, не оценивает политику выполнения, не вызывает поставщиков LLM напрямую и не читает базу SQLite.
+
+## 6. Сценарий A — успешный запрос доступа
 
 Откройте:
 
@@ -159,40 +159,40 @@ UI — это local operations console поверх backend API. Он не вы�
 http://127.0.0.1:5173/workflows/access
 ```
 
-Используйте default known-good values:
+Используйте проверенные значения по умолчанию. Английский текст входных данных сохраняется намеренно, независимо от языка интерфейса.
 
-| Field         | Value                           |
-| ------------- | ------------------------------- |
-| User ID       | `user-1`                        |
-| Request text  | `Need access to CRM.`           |
-| Employee ID   | `emp-001`                       |
-| System ID     | `crm`                           |
-| Access level  | `READ`                          |
-| Duration days | `30`                            |
-| Approval mode | `HIGH_RISK_ONLY`                |
-| Justification | `Need access for routine work.` |
+| Поле | Значение |
+| --- | --- |
+| ID пользователя | `user-1` |
+| Текст запроса | `Need access to CRM.` |
+| ID сотрудника | `emp-001` |
+| ID системы | `crm` |
+| Уровень доступа | `READ` |
+| Срок, дней | `30` |
+| Режим согласования | `HIGH_RISK_ONLY` |
+| Обоснование | `Need access for routine work.` |
 
-Отправьте форму через `Submit access request`.
+Нажмите «Отправить запрос доступа».
 
-Ожидаемый controlled outcome:
+Ожидаемый контролируемый результат:
 
-* status: `COMPLETED`;
-* `Requires approval`: `no`;
-* synthetic draft output создаётся backend-controlled tool path.
+* статус `COMPLETED` — «Завершён»;
+* «Требует согласования» — «нет»;
+* черновик создаётся серверным инструментом в пределах разрешённого выполнения.
 
-Откройте run links из submit result:
+Из результата отправки откройте ссылки:
 
-* `Run Detail`;
-* `Tool Calls`;
-* `Audit Trail`.
+* «Сведения о запуске»;
+* «Вызовы инструментов»;
+* «Журнал аудита».
 
-В Run Detail проверьте controlled outcome, final summary, risk и record counts. В Tool Calls проверьте, что access checks и draft action отображаются как backend tool records со statuses и redacted payload JSON. В Audit Trail проверьте lifecycle events, такие как run creation, policy check и completion.
+В сведениях о запуске проверьте результат, итоговую сводку, риск и количество записей. Во вызовах инструментов посмотрите проверки доступа и создание черновика: записи содержат статусы и JSON данных с маскированием чувствительных значений. В журнале аудита должны быть события создания запуска, проверки политики выполнения и завершения.
 
-Это доказывает happy path: provider предлагает structured access decision, backend валидирует его, read tools запускаются через registered boundaries, policy разрешает draft action, а audit фиксирует lifecycle.
+Этот путь показывает последовательность: поставщик модели предлагает структурированное решение по доступу, сервер проверяет его, инструменты чтения выполняются через зарегистрированные границы, политика разрешает создание черновика, а аудит сохраняет события.
 
-Если изменить `Access level` на `ADMIN`, тот же workflow должен перейти в controlled approval path вместо прямого завершения.
+Если изменить «Уровень доступа» на `ADMIN`, сценарий должен перейти к обязательному согласованию вместо немедленного завершения.
 
-## 7. Scenario B — Procurement approval path
+## 7. Сценарий B — закупка с согласованием
 
 Откройте:
 
@@ -200,38 +200,38 @@ http://127.0.0.1:5173/workflows/access
 http://127.0.0.1:5173/workflows/procurement
 ```
 
-Начните с default form и измените эти поля на reliable approval case:
+В форме со значениями по умолчанию измените три поля:
 
-| Field           | Value                     |
-| --------------- | ------------------------- |
-| Item ID         | `item-service`            |
-| Item name       | `Implementation services` |
-| Estimated total | `1500`                    |
+| Поле | Значение |
+| --- | --- |
+| ID позиции | `item-service` |
+| Наименование | `Implementation services` |
+| Ожидаемая сумма | `1500` |
 
-Остальные default values оставьте без изменений:
+Остальные значения оставьте исходными:
 
-| Field            | Value                    |
-| ---------------- | ------------------------ |
-| User ID          | `user-1`                 |
-| Request text     | `Need to buy equipment.` |
-| Requester ID     | `req-001`                |
-| Quantity         | `1`                      |
-| Currency         | `USD`                    |
-| Cost center      | `cc-ops`                 |
-| Preferred vendor | `vendor-approved-001`    |
-| Approval mode    | `HIGH_RISK_ONLY`         |
-| Justification    | `Need equipment.`        |
+| Поле | Значение |
+| --- | --- |
+| ID пользователя | `user-1` |
+| Текст запроса | `Need to buy equipment.` |
+| ID инициатора | `req-001` |
+| Количество | `1` |
+| Валюта | `USD` |
+| Центр затрат | `cc-ops` |
+| Предпочтительный поставщик | `vendor-approved-001` |
+| Режим согласования | `HIGH_RISK_ONLY` |
+| Обоснование | `Need equipment.` |
 
-Отправьте форму через `Submit procurement request`.
+Нажмите «Отправить запрос на закупку».
 
-Synthetic Procurement API contract является USD-only: другое currency value отклоняется с HTTP 422. При resolution поле `Decided by` должно оставаться непустым; blank или whitespace-only actor также отклоняется с HTTP 422.
+Демонстрационный API закупки принимает только валюту `USD`; другое значение возвращает HTTP 422. При принятии решения поле «Решение принял» должно оставаться непустым: пустая строка или строка из пробелов также отклоняется с HTTP 422.
 
-Ожидаемый initial controlled outcome:
+Ожидаемый начальный результат:
 
-* status: `WAITING_FOR_APPROVAL`;
-* `Requires approval`: `yes`;
-* возвращается pending approval;
-* purchase request draft action ещё не выполнен.
+* статус `WAITING_FOR_APPROVAL` — «Требуется согласование»;
+* «Требует согласования» — «да»;
+* возвращается согласование, ожидающее решения;
+* действие создания черновика закупки ещё не выполнено.
 
 Откройте:
 
@@ -239,23 +239,25 @@ Synthetic Procurement API contract является USD-only: другое curre
 /runs/{run_id}/approvals
 ```
 
-Выберите pending approval. В форме поле `Decided by` по умолчанию заполнено как `manager-001`. Выберите одну ветку:
+Выберите согласование, ожидающее решения. Поле «Решение принял» по умолчанию содержит `manager-001`. Это демонстрационная подпись оператора: аутентификации и проверки его роли по RBAC в прототипе нет.
 
-* нажмите `Approve`, чтобы resolve approval и завершить run;
-* нажмите `Reject`, чтобы отклонить run без draft;
-* нажмите `Cancel`, чтобы отменить approval и отклонить run без draft.
+Выберите одну ветку:
 
-После approval обновите или откройте Run Detail и ожидайте final status `COMPLETED`. После reject или cancel ожидайте final status `REJECTED`.
+* «Согласовать» — принять положительное решение и завершить запуск;
+* «Отклонить» — отклонить запуск без черновика;
+* «Отменить» — отменить согласование и отклонить запуск без черновика.
 
-Проверьте Tool Calls:
+После согласования обновите или откройте сведения о запуске: ожидается конечный статус `COMPLETED`. После отклонения или отмены ожидается `REJECTED`.
 
-* до approval draft action не должен успешно выполниться;
-* после approval draft action может успешно выполниться и создать synthetic draft;
-* после rejection или cancellation draft не создаётся.
+Проверьте вызовы инструментов:
 
-Проверьте Audit Trail на наличие approval request, approval decision и final lifecycle events. Это доказывает, что high-value procurement не создаёт draft до approval, а approval resolution обрабатывается backend API, а не local UI logic.
+* до согласования действие создания черновика не должно успешно выполняться;
+* после согласования оно может успешно выполниться и создать демонстрационный черновик;
+* после отклонения или отмены черновик не создаётся.
 
-## 8. Scenario C — Maintenance default/safe path
+В журнале аудита проверьте запрос согласования, принятое решение и итоговые события. Сценарий показывает, что закупка на большую сумму не создаёт черновик до разрешения, а решение обрабатывается серверным API.
+
+## 8. Сценарий C — безопасный путь обслуживания
 
 Откройте:
 
@@ -263,31 +265,31 @@ Synthetic Procurement API contract является USD-only: другое curre
 http://127.0.0.1:5173/workflows/maintenance
 ```
 
-Используйте default known-good values:
+Используйте проверенные значения по умолчанию:
 
-| Field             | Value                                    |
-| ----------------- | ---------------------------------------- |
-| User ID           | `user-1`                                 |
-| Request text      | `Routine inspection for Cooling pump 1.` |
-| Requester ID      | `maint-req-001`                          |
-| Asset ID          | `asset-pump-001`                         |
-| Asset name        | `Cooling pump 1`                         |
-| Location          | `Plant A`                                |
-| Observed severity | `LOW`                                    |
-| Approval mode     | `HIGH_RISK_ONLY`                         |
-| Issue description | `Routine inspection needed.`             |
-| Safety concern    | unchecked                                |
+| Поле | Значение |
+| --- | --- |
+| ID пользователя | `user-1` |
+| Текст запроса | `Routine inspection for Cooling pump 1.` |
+| ID инициатора | `maint-req-001` |
+| ID актива | `asset-pump-001` |
+| Название актива | `Cooling pump 1` |
+| Местоположение | `Plant A` |
+| Зафиксированная критичность | `LOW` |
+| Режим согласования | `HIGH_RISK_ONLY` |
+| Описание проблемы | `Routine inspection needed.` |
+| Есть угроза безопасности | Флажок снят |
 
-Отправьте форму через `Submit maintenance request`.
+Нажмите «Отправить заявку на обслуживание».
 
-Ожидаемый controlled outcome:
+Ожидаемый результат:
 
-* status: `COMPLETED`;
-* pending approval отсутствует;
-* создаётся synthetic maintenance work order draft;
-* audit/tool records показывают low-severity maintenance path.
+* статус `COMPLETED` — «Завершён»;
+* согласования, ожидающего решения, нет;
+* создаётся демонстрационный черновик заказ-наряда;
+* записи инструментов и аудита показывают путь обслуживания низкой критичности.
 
-Используйте uppercase maintenance severity values из UI selector:
+Используйте значения критичности в верхнем регистре из списка интерфейса:
 
 ```text
 LOW
@@ -296,112 +298,111 @@ HIGH
 CRITICAL
 ```
 
-Backend валидирует canonical `MaintenanceSeverity` values. Lowercase или unknown API payload values не являются documented default UI path.
+Сервер проверяет допустимые значения `MaintenanceSeverity`. Значения в нижнем регистре или неизвестные значения в запросах API не относятся к описанному пути интерфейса по умолчанию.
 
-Не скрывайте `FAILED_TOOL` во время экспериментов. Если `FAILED_TOOL` появляется при другом arbitrary maintenance input, это controlled backend failure state, безопасно отображаемый UI. Это не UI crash, и его не следует представлять как successful maintenance outcome.
+При экспериментах с произвольным текстом заявки может появиться `FAILED_TOOL`. Показывайте его как контролируемую серверную ошибку, а не успешное обслуживание или сбой интерфейса. Для воспроизводимой демонстрации используйте значения из таблицы и изучайте вызовы инструментов и журнал аудита.
 
-## 9. Инспекция run
+## 9. Просмотр отдельного запуска
 
-Run-scoped frontend pages:
+Страницы веб-интерфейса относятся к одному запуску:
 
-| Page                        | Purpose                                                                                                                   |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `/runs/{run_id}`            | Run Detail: controlled outcome, final summary, run metadata, record counts и run JSON.                                    |
-| `/runs/{run_id}/approvals`  | Run Approvals: pending или terminal approvals для этого run, а также approval actions, если approval находится в pending. |
-| `/runs/{run_id}/tool-calls` | Run Tool Calls: tool names, tool types, statuses, approval links, safe errors и redacted input/output payloads.           |
-| `/runs/{run_id}/audit`      | Run Audit Trail: chronological audit events, actors и selected event payload JSON.                                        |
+| Страница | Назначение |
+| --- | --- |
+| `/runs/{run_id}` | Сведения о запуске: контролируемый результат, итоговая сводка, метаданные, количество записей и JSON запуска. |
+| `/runs/{run_id}/approvals` | Согласования запуска: ожидающие и окончательные согласования; действия доступны, пока решение не принято. |
+| `/runs/{run_id}/tool-calls` | Вызовы инструментов запуска: имена, типы, статусы, связи с согласованиями, безопасные сообщения об ошибках и входные/выходные данные с маскированием. |
+| `/runs/{run_id}/audit` | Журнал аудита запуска: хронология событий, инициаторы и JSON выбранного события. |
 
-Страница Agent Runs — это session-known index, построенный из browser-local run IDs. У backend сейчас нет global run listing endpoint. Local known-run index — это demo convenience, а не backend truth. UI отдельно показывает complete, partial, unavailable и stale/error state: failed или partial read не должен выглядеть как authoritative empty/current result, а данные и actions под run/approval route принадлежат только текущему ID.
+Страница «Запуски агента» — индекс ID, известных локальной сессии браузера. Общего серверного маршрута списка запусков нет. Интерфейс различает полные, частичные, недоступные и устаревшие данные, включая ошибки чтения. Частичный или неудачный ответ не представляется достоверным пустым или актуальным результатом; данные и действия страницы принадлежат только текущему ID запуска или согласования.
 
-Чтобы проверить существующий run, вставьте его `run_id` в control `Open Run` на Dashboard или Settings. Если backend знает этот run, UI добавит его в local known-run index и откроет страницу run detail.
+Чтобы проверить существующий запуск, вставьте его `run_id` в поле «Открыть запуск» на обзоре или в настройках. Если сервер знает запуск, интерфейс добавит ID в локальный индекс и откроет сведения о нём.
 
-## 10. Запуск evals
+## 10. Запуск приёмочных проверок
 
-Запустите deterministic API acceptance suite:
+Запустите детерминированный набор проверок API:
 
 ```bash
 uv run python scripts/run_eval.py
 uv run python scripts/run_eval.py --format json
 ```
 
-Ожидаемый результат:
+При успешном прохождении ожидается:
 
 ```text
 21/21 passed
 ```
 
-Text report выводит:
+Соответствующая строка текстового отчёта:
 
 ```text
 Total: 21  Passed: 21  Failed: 0
 ```
 
-Evals доказывают deterministic backend/API behavior для controlled statuses, approval gating, no-draft-before-approval behavior, readback endpoints, audit events, reason codes, redaction-related expectations и failed-validation handling.
+Это пример ожидаемого успешного результата, а не отчёт о последнем запуске. Проверки охватывают контролируемые статусы, обязательное согласование, отсутствие черновика до разрешения, маршруты чтения, аудит, коды причин, ожидания по маскированию и обработку ошибок валидации.
 
-Evals не доказывают production security, real provider quality, real enterprise connector behavior, auth/RBAC/tenant behavior, scalability, full UI E2E coverage или production monitoring readiness.
+Приёмочные проверки не подтверждают безопасность промышленной эксплуатации, качество реального поставщика модели, реальные корпоративные интеграции, аутентификацию, RBAC, изоляцию арендаторов, масштабируемость, полное сквозное тестирование интерфейса или готовность промышленного мониторинга.
 
-## 11. На что обратить внимание во время demo
+## 11. На что обратить внимание при показе
 
-* Backend-controlled lifecycle от workflow submit до final run status.
-* Approval boundary для risky state-changing draft actions.
-* Draft/no-draft behavior до и после approval decisions.
-* Tool-call visibility с registered tool names, statuses и safe errors.
-* Audit trail с run-scoped lifecycle evidence.
-* Redacted public payload projection в API и UI readback.
-* Controlled failure statuses, такие как `NEEDS_USER_INPUT`, `NEEDS_MANUAL_REVIEW`,
-  `REJECTED`, `FAILED_VALIDATION`, `FAILED_TOOL` и `FAILED_PROVIDER`.
-* Разделение Frontend/API: React client отображает backend-controlled results через `/api/v1`.
+* Сервер управляет жизненным циклом от отправки сценария до конечного статуса запуска.
+* Рискованные изменяющие состояние действия защищены согласованием.
+* Наличие или отсутствие черновика соответствует этапу согласования и решению.
+* Видны зарегистрированные имена инструментов, статусы и безопасные сообщения об ошибках.
+* Журнал аудита содержит события выбранного запуска.
+* В публичных данных API и интерфейса маскируются чувствительные значения.
+* Контролируемые остановки и ошибки показаны явно: `NEEDS_USER_INPUT`, `NEEDS_MANUAL_REVIEW`, `REJECTED`, `FAILED_VALIDATION`, `FAILED_TOOL`, `FAILED_PROVIDER`.
+* Веб-интерфейс на React отображает результаты сервера через `/api/v1`.
 
-## 12. Troubleshooting
+## 12. Решение проблем
 
-Backend root `/` возвращает 404:
+### Корневой путь сервера возвращает 404
 
-Это нормально. Используйте `/api/v1/health`, `/api/v1/capabilities` или frontend dashboard.
+Для корневого пути `/` это ожидаемо. Используйте `/api/v1/health`, `/api/v1/capabilities` или страницу обзора веб-интерфейса.
 
-Frontend не может подключиться к API:
+### Веб-интерфейс не может подключиться к API
 
-Убедитесь, что backend запущен на порту 8000, а frontend запущен через Vite dev server. Frontend вызывает `/api/v1`, а Vite проксирует `/api` на `http://localhost:8000`.
+Убедитесь, что сервер работает на порту 8000, а веб-интерфейс запущен через Vite. Клиент вызывает `/api/v1`, а Vite проксирует `/api` на `http://localhost:8000`.
 
-Runner сообщает conflict на порту 5173:
+### Программа запуска сообщает о конфликте на порту 5173
 
-Это означает, что service не прошёл exact Gateway marker + proxied `/api/v1/health` identity probe. Произвольный HTTP 2xx/3xx server и marker без working API proxy не переиспользуются и не останавливаются runner-ом. Освободите port или запустите корректный Gateway frontend.
+Сервис не прошёл проверку точного маркера Gateway и проксируемого `/api/v1/health`. Произвольный HTTP-сервер с ответом 2xx/3xx, как и сервер с маркером, но без рабочего прокси API, не переиспользуется и не останавливается. Освободите порт или запустите корректный веб-интерфейс Gateway.
 
-Runner cleanup и logs:
+### Остановка и логи программы запуска
 
-Per-instance metadata находится в `.runtime/instances/<instance-id>/`, а logs — в `.runtime/logs/<instance-id>/`. `Ctrl+C`, закрытие окна и `Q` останавливают services текущего Runner; переиспользованные services сохраняют своего владельца. Для cleanup старых verified instances выполните `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1`; unverifiable records остаются нетронутыми для диагностики.
+Метаданные экземпляра находятся в `.runtime/instances/<instance-id>/`, логи — в `.runtime/logs/<instance-id>/`. `Ctrl+C`, закрытие окна и `Q` останавливают сервисы текущего экземпляра; переиспользованные сервисы сохраняют своего владельца.
 
-`npm` отсутствует в PATH на Windows:
+Для очистки старых подтверждённых экземпляров выполните `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo/stop_demo.ps1`. Записи, принадлежность которых не удалось подтвердить, остаются нетронутыми для диагностики.
 
-При необходимости используйте полный путь к npm:
+### В Windows нет `npm` в PATH
+
+При необходимости используйте полный путь:
 
 ```text
 C:\Program Files\nodejs\npm.cmd
 ```
 
-Black screen:
+### Чёрный экран
 
-Проверьте browser console и Vite terminal. Текущий frozen prototype не должен показывать blank screen в documented default paths.
+Проверьте консоль браузера и терминал Vite. Для замороженного прототипа описанные пути по умолчанию не должны приводить к пустому экрану.
 
-Maintenance возвращает `FAILED_TOOL` для non-default arbitrary input:
+### Обслуживание возвращает FAILED_TOOL на произвольных данных
 
-Считайте это controlled backend failure state. Используйте documented known-good maintenance values для default/safe walkthrough и проверяйте Tool Calls и Audit Trail вместо того, чтобы считать это UI crash.
+Это контролируемая ошибка серверной части. Для воспроизводимого показа используйте значения сценария C. Изучите вызовы инструментов и журнал аудита: такая ошибка не означает сбой интерфейса и не является успешным результатом обслуживания.
 
-Real provider credentials:
+### Нужны ли ключи реального поставщика модели
 
-Они не требуются для default demo. Default provider mode — `mock`.
+Для демонстрации по умолчанию они не требуются: используется заглушка `mock`.
 
-## 13. Demo limitations
+## 13. Ограничения демонстрации
 
-Это demo намеренно ограничено:
+* Только локальное демонстрационное приложение.
+* Синтетические данные сценариев.
+* Детерминированная заглушка `mock` по умолчанию.
+* Нет аутентификации, RBAC и изоляции арендаторов.
+* Нет реальных IAM, ERP, 1С, Jira, CRM, CMMS, EAM и других корпоративных интеграций.
+* Нет выбора поставщика LLM и модели.
+* Нет промышленного развёртывания.
+* Нет общего серверного списка запусков и глобального поиска аудита.
+* Полное сквозное тестирование интерфейса не заявляется.
 
-* только local/demo;
-* synthetic workflow data;
-* deterministic mock provider по умолчанию;
-* нет auth, RBAC или tenants;
-* нет реальных IAM, ERP, 1C, Jira, CRM, CMMS, EAM или других enterprise connectors;
-* нет provider/model selection;
-* нет production deployment;
-* нет global backend run listing или global audit search;
-* нет claim о full UI E2E test coverage.
-
-Демонстрируемая ценность — это control pattern: backend validation, controlled tool boundaries, policy checks, approval gates, audit records и public run-scoped readback.
+Ценность прототипа — модель контролируемого выполнения: серверная валидация, границы инструментов, политика выполнения, согласования, журнал аудита и публичное чтение записей отдельного запуска.

@@ -1,76 +1,173 @@
+<div align="center">
+
 # Enterprise AI Tool Gateway
 
-## 1. Что это
+**Локальный шлюз AI-инструментов: проверка предложенных действий, согласование оператором и журнал выполнения.**
 
-Enterprise AI Tool Gateway — это локальный/demo-прототип контролируемого выполнения инструментов LLM для синтетических enterprise workflows: модель предлагает structured decisions, backend валидирует их, tools выполняются только через controlled backend boundaries, approval ограничивает risky actions, audit фиксирует lifecycle evidence, а web UI отображает controlled lifecycle через `/api/v1`.
+![Python](https://img.shields.io/badge/Python-3.14%2B-3776AB)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688)
+![React / TypeScript](https://img.shields.io/badge/React-TypeScript-3178C6)
+![SQLite](https://img.shields.io/badge/SQLite-003B57)
+![Версия](https://img.shields.io/badge/version-0.1.0-6F42C1)
+![Интерфейс](https://img.shields.io/badge/interface-RU%20%2F%20EN-2EA44F)
 
-Это не chatbot, не автономное прямое использование tools со стороны LLM и не production SaaS platform.
+[Демонстрация](#демонстрация) · [Быстрый старт](#быстрый-старт) · [Архитектура](#как-устроен-gateway)
+
+</div>
 
 ## Демонстрация
 
-Видео работы расширения и примеры его интерфейса.
+Около двух минут: три реализованных сценария — доступ к системе, закупка и обслуживание — в русском интерфейсе Gateway.
 
 [Смотреть видео](https://github.com/user-attachments/assets/d8f6e8f7-d521-42de-986b-02f59fa2bdbc)
 
-### Images
+**Содержание**
 
-<img width="3831" height="2048" alt="Dashboard" src="https://github.com/user-attachments/assets/780fb52a-6d07-410c-9b6a-e8f4d09686ec" />
+- [Зачем нужен Gateway](#зачем-нужен-gateway)
+- [Возможности](#возможности)
+- [Скриншоты](#скриншоты)
+- [Как устроен Gateway](#как-устроен-gateway)
+- [Быстрый старт](#быстрый-старт)
+- [Проверки](#проверки)
+- [Ограничения](#ограничения)
+- [Статус](#статус)
+- [Документация](#документация)
 
-<img width="3831" height="2051" alt="Run Detail" src="https://github.com/user-attachments/assets/b107e7a7-ffbc-4e26-95fb-d444b85a62a2" />
+---
 
-<img width="3832" height="2038" alt="Settings" src="https://github.com/user-attachments/assets/0e1da123-e549-4bb9-b8e6-8cfcc24c2375" />
+## Зачем нужен Gateway
 
-<img width="3836" height="2047" alt="Workflow submit" src="https://github.com/user-attachments/assets/bab384b7-f723-4c09-b19c-45efa40d5c54" />
+Enterprise AI Tool Gateway показывает, как отделить предложение языковой модели от разрешения выполнить действие. Модель возвращает структурированное предложение; сервер проверяет его, обращается к зарегистрированным инструментам, применяет правила допуска и при необходимости запрашивает решение оператора. Ход обработки и результат сохраняются для последующего просмотра.
 
-<img width="3835" height="2046" alt="Manual review" src="https://github.com/user-attachments/assets/2349e6b5-0ac2-40c7-9b06-1e4f6912b244" />
+Например, заявка на закупку услуг стоимостью 1500 USD проходит проверки и останавливается до согласования. После подтверждения сервер создаёт синтетический черновик заявки; при отклонении черновик не создаётся. Оператор видит состояние запуска, вызовы инструментов и журнал событий.
 
+Это демонстрационный прототип с искусственными данными. Обычный локальный запуск использует заглушку поставщика модели; подключение GigaChat вынесено в отдельный ручной сценарий.
 
+## Возможности
 
-## 2. Что это демонстрирует
+| Сценарий | Что проверяет и показывает |
+| --- | --- |
+| Доступ к системе — `ACCESS_REQUEST` | Заявка сотрудника, проверки доступа, правила допуска и синтетический черновик |
+| Закупка — `PROCUREMENT_REQUEST` | Проверки закупки, согласование действия и синтетический черновик заявки |
+| Обслуживание — `MAINTENANCE_REQUEST` | Проверки оборудования и риска, безопасный исход либо передача на ручную проверку |
 
-* Controlled gateway lifecycle от workflow submission до final run status.
-* Синтетические enterprise workflows для access, procurement и maintenance.
-* FastAPI backend с версионированными endpoints `/api/v1`.
-* React/Vite frontend как локальная RU/EN web console поверх API; fresh local session по умолчанию использует русский язык.
-* Deterministic eval suite для backend/API acceptance behavior.
-* Public redaction/projection boundary для run, tool, approval и audit data.
+Общие механизмы:
 
-## 3. Архитектура в общих чертах
+- проверка структуры предложения модели, типа заявки, предметного шаблона и допустимых инструментов;
+- согласование действий, меняющих состояние, с подтверждением, отклонением или отменой;
+- карточка запуска со связанными вызовами инструментов, согласованиями и событиями;
+- сохранение состояния в SQLite и маскирование чувствительных полей в ответах API;
+- веб-интерфейс на русском и английском языках;
+- набор из 21 детерминированного проверочного случая для поведения API.
+
+Инженерный акцент проекта — разделение ответственности модели, серверной обработки, инструментов и интерфейса. Сервер принимает решения о допуске и хранит состояние, а интерфейс отправляет заявки и отображает полученные через API результаты.
+
+## Скриншоты
+
+Кадры сняты в английском интерфейсе; видео выше — в русском. Оба языка доступны в приложении.
+
+<details>
+<summary><strong>Обзорная панель</strong></summary>
+
+Состояние API, демонстрационный режим, доступные сценарии и известные текущему браузеру запуски.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/780fb52a-6d07-410c-9b6a-e8f4d09686ec" alt="Обзорная панель Gateway с состоянием API, сценариями и списком запусков" width="100%" />
+</p>
+
+</details>
+
+<details>
+<summary><strong>Отправка заявки</strong></summary>
+
+Форма заявки на закупку и её отправка на серверную обработку.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/bab384b7-f723-4c09-b19c-45efa40d5c54" alt="Отправка заявки через веб-интерфейс Gateway" width="100%" />
+</p>
+
+</details>
+
+<details>
+<summary><strong>Карточка запуска</strong></summary>
+
+Итог обработки, сведения о сценарии и переходы к связанным вызовам инструментов, согласованиям и событиям.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/b107e7a7-ffbc-4e26-95fb-d444b85a62a2" alt="Карточка запуска Gateway с результатом и связанными записями" width="100%" />
+</p>
+
+</details>
+
+<details>
+<summary><strong>Ручная проверка</strong></summary>
+
+Контролируемый исход для заявки, которой требуется ручная проверка.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/2349e6b5-0ac2-40c7-9b06-1e4f6912b244" alt="Запуск Gateway, требующий ручной проверки" width="100%" />
+</p>
+
+</details>
+
+<details>
+<summary><strong>Настройки и состояние API</strong></summary>
+
+Параметры подключения к API и сведения о локальном демонстрационном режиме.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/0e1da123-e549-4bb9-b8e6-8cfcc24c2375" alt="Настройки Gateway и сведения о состоянии API" width="100%" />
+</p>
+
+</details>
+
+## Как устроен Gateway
+
+### Компоненты и ответственность
 
 ```mermaid
-flowchart LR
-    Frontend["Frontend<br/>React/Vite"]
-    API["FastAPI<br/>/api/v1"]
-    Runtime["Application runtimes"]
-    Validation["Provider decision<br/>validation"]
-    Controls["Policy / tools<br/>approval / audit"]
-    DB[("SQLite")]
-    Readback["API readback"]
-    Display["Frontend display"]
+flowchart TB
+    UI["Веб-интерфейс<br/>React / TypeScript / Vite"]
+    API["HTTP API<br/>FastAPI /api/v1"]
+    Runtime["Серверные сценарии<br/>доступ / закупка / обслуживание"]
+    Provider["Поставщик модели<br/>заглушка по умолчанию"]
+    Controls["Проверки, правила допуска<br/>и согласование"]
+    Tools["Зарегистрированные инструменты"]
+    DB[("SQLite<br/>запуски, результаты, журнал")]
 
-    Frontend --> API --> Runtime --> Validation --> Controls --> DB
-    DB --> Readback --> Display
+    UI <-->|"заявки, решения, результаты"| API
+    API <--> Runtime
+    Runtime <-->|"структурированное предложение"| Provider
+    Runtime --> Controls
+    Runtime -->|"разрешённые вызовы"| Tools
+    Runtime <-->|"сохранение и чтение"| DB
 ```
 
-Backend владеет workflow decisions. Frontend отправляет demo requests, resolves approvals через API и отображает backend-controlled readback.
+Предложение модели считается недоверенным вводом. Сервер проверяет его и управляет выполнением; интерфейс получает только предназначенные для отображения данные через `/api/v1`.
 
-## 4. Текущие возможности
+### Путь заявки
 
-Реализованные capabilities:
+```mermaid
+flowchart TB
+    Request["Отправка заявки"] --> Checks["Предложение модели,<br/>валидация и проверки чтения"]
+    Checks --> Policy{"Решение правил допуска"}
+    Checks -->|"ошибка валидации"| Outcome["Сохранённый исход<br/>и журнал событий"]
+    Policy -->|"разрешено"| Execute["Выполнение разрешённого действия"]
+    Policy -->|"нужно согласование"| Pending["Ожидание решения оператора"]
+    Policy -->|"отказ / ручная проверка"| Stop["Действие не выполняется"]
+    Pending -->|"подтверждено"| Execute
+    Pending -->|"отклонено / отменено"| Stop
+    Execute -->|"результат / ошибка инструмента"| Outcome
+    Stop --> Outcome
+```
 
-* `ACCESS_REQUEST`;
-* `PROCUREMENT_REQUEST`;
-* `MAINTENANCE_REQUEST`;
-* approval flow для risky state-changing draft actions;
-* run detail и run-scoped readback;
-* registered tool calls с safe public projection;
-* audit trail для lifecycle events;
-* deterministic eval runner;
-* local web console.
+Проверки, которые только читают данные, могут выполняться до согласования. Изменяющий состояние инструмент создаёт синтетический черновик только после разрешения по правилам допуска или обязательного согласования. Полная последовательность и остальные возможные исходы описаны в [архитектуре](docs/ARCHITECTURE.md) и [описании API](docs/API_AND_EVALS.md).
 
-## 5. Quickstart
+## Быстрый старт
 
-После clean checkout сначала установите frontend dependencies:
+Нужны **Python ≥3.14**, **uv**, **Node.js и npm**. Команды выполняются из корня репозитория, если не указано иное. Для демонстрации с заглушкой ключи поставщиков моделей не требуются.
+
+После получения репозитория установите зависимости веб-интерфейса:
 
 ```bash
 cd frontend
@@ -78,28 +175,32 @@ npm install
 cd ..
 ```
 
-Затем используйте быстрый demo runner для Windows:
+### Запуск в Windows
 
 ```text
 run_demo.cmd
 ```
 
-Runner запускает backend и frontend, проверяет их готовность и открывает dashboard. Логи обоих сервисов видны в одном PowerShell-окне и сохраняются в `.runtime/logs/<instance-id>/`. Нажмите `Ctrl+C` для штатной остановки; закрытие окна также завершает все процессы, запущенные этим Runner. `Q` остаётся дополнительным способом остановки. Уже готовые services переиспользуются без передачи ownership. Для explicit cleanup старых проверенных instances используйте `scripts/demo/stop_demo.ps1`. Runner не устанавливает npm dependencies автоматически.
+Программа запуска поднимает сервер и веб-интерфейс, проверяет их готовность и открывает обзорную панель. Логи обоих сервисов видны в одном окне PowerShell и сохраняются в `.runtime/logs/<instance-id>/`.
 
-Запустить backend из корня repository:
+Нажмите `Ctrl+C` для штатной остановки. Закрытие окна также завершает процессы, запущенные этой программой; `Q` — дополнительный способ остановки. Уже готовые сервисы переиспользуются и сохраняют своего владельца. Для явной остановки старых экземпляров с проверенным владельцем предусмотрен `scripts/demo/stop_demo.ps1`. Зависимости npm устанавливаются отдельно.
+
+### Запуск в двух терминалах
+
+Сервер — из корня репозитория:
 
 ```bash
 uv run uvicorn enterprise_ai_tool_gateway.api.http.app:app --reload
 ```
 
-Запустить frontend во втором терминале:
+Веб-интерфейс — во втором терминале:
 
 ```bash
 cd frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Открыть:
+Адреса интерфейса, проверки готовности и доступных возможностей:
 
 ```text
 http://127.0.0.1:5173/dashboard
@@ -107,11 +208,13 @@ http://127.0.0.1:8000/api/v1/health
 http://127.0.0.1:8000/api/v1/capabilities
 ```
 
-Backend root `/` может возвращать 404. Это нормально: backend обслуживает версионированный API, а frontend обслуживается через Vite.
+Корневой адрес сервера `/` может возвращать 404: API доступен через `/api/v1`, а веб-интерфейс обслуживает Vite.
 
-## 6. Validation
+Для первого показа используйте проверенные значения из [пошагового руководства](docs/DEMO_WALKTHROUGH.md). Демонстрационные инструменты работают с ограниченным набором искусственных данных; произвольный текст не гарантирует тот же путь обработки.
 
-Backend validation:
+## Проверки
+
+Серверная часть:
 
 ```bash
 uv run pytest
@@ -121,7 +224,7 @@ uv run python scripts/run_eval.py
 uv run python scripts/run_eval.py --format json
 ```
 
-Frontend validation:
+Веб-интерфейс:
 
 ```bash
 cd frontend
@@ -129,42 +232,32 @@ npm run typecheck
 npm run build
 ```
 
-Default validation использует deterministic mock/static provider paths. Real provider credentials не требуются.
+Обычные проверки используют детерминированные заглушки поставщика модели и не требуют реальных ключей. Ожидаемые исходы 21 проверочного случая перечислены в [документе об API и проверках](docs/API_AND_EVALS.md).
 
-## 7. Demo walkthrough
+## Ограничения
 
-Используйте [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md) для guided local demo. Он покрывает Access happy path, Procurement approval path, Maintenance default/safe path, Run Detail, Tool Calls, Audit Trail и eval runner.
+- Локальный демонстрационный прототип с синтетическими данными и действиями.
+- По умолчанию используется заглушка модели. GigaChat проверяется отдельным ручным сценарием; переключателя моделей в интерфейсе нет.
+- Аутентификация, ролевая модель доступа и изоляция организаций не реализованы.
+- Реальные корпоративные системы и необратимые внешние действия не подключены.
+- Развёртывание, хостинг, платежи и подготовка защиты для промышленной эксплуатации не входят в текущий объём.
+- Список известных запусков хранится в текущем браузере; общего серверного списка запусков нет.
 
-## 8. Карта документации
+## Статус
 
-* [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) - current prototype scope,
-  implemented workflows, safety status и intentional non-goals.
-* [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - system architecture, request
-  lifecycle, tool boundary, approval boundary, audit/redaction model и
-  limitations.
-* [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) - repository structure, package
-  ownership, entrypoints и boundary rules.
-* [docs/API_AND_EVALS.md](docs/API_AND_EVALS.md) - public API surface,
-  controlled outcomes, redaction behavior и deterministic eval suite.
-* [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md) - step-by-step local
-  demo scenarios для backend и frontend.
-* [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) - local setup,
-  validation commands, smoke checks и safe development workflow.
+Версия `0.1.0`: текущий демонстрационный объём завершён, дальнейшая функциональная разработка заморожена. Возможности и ограничения описаны по существующей реализации; будущие идеи остаются отложенными.
 
-## 9. Известные ограничения
+Текущее описание реализации и её границ находится в публичных документах в `docs/`.
 
-* Только local/demo.
-* Mock provider path по умолчанию.
-* Synthetic workflow data.
-* Нет authentication, RBAC или tenants.
-* Нет real enterprise connectors.
-* Нет provider/model selection.
-* Нет deployment, hosting или payment support.
-* Нет production security hardening.
-* Frontend использует browser-local known-run index, а не global backend listing.
+## Документация
 
-## 10. Статус
-
-Этот repository представляет текущий frozen local/demo prototype. Реализация feature-complete для documented demo scope, а future ideas должны рассматриваться как backlog, а не implemented capabilities.
-
-Используйте public docs в `docs/` как текущий source of truth.
+| Документ | Содержание |
+| --- | --- |
+| [Контекст проекта](docs/PROJECT_CONTEXT.md) | Назначение, реализованные сценарии и границы прототипа |
+| [Архитектура](docs/ARCHITECTURE.md) | Слои, жизненный цикл заявки, инструменты, согласование, хранение и журнал |
+| [Карта проекта](docs/PROJECT_MAP.md) | Структура репозитория, модули и точки входа |
+| [API и проверки](docs/API_AND_EVALS.md) | Методы API, контролируемые исходы, маскирование и 21 проверочный случай |
+| [Пошаговая демонстрация](docs/DEMO_WALKTHROUGH.md) | Запуск и прохождение трёх сценариев через интерфейс |
+| [Руководство по разработке](docs/DEVELOPMENT_GUIDE.md) | Окружение, команды, проверка запуска и диагностика |
+| [Политика поставщиков моделей](docs/LLM_PROVIDER_POLICY.md) | Заглушка, ручной путь GigaChat и правила обработки предложений модели |
+| [Проверочная ведомость разработки](docs/DEVELOPMENT_CHECKLIST.md) | Проверки при изменениях и сохранение границ проекта |

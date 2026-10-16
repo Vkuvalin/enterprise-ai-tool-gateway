@@ -2,145 +2,145 @@
 
 ## 1. Тезис проекта
 
-Enterprise AI Tool Gateway — это локальный/demo-прототип контролируемого выполнения инструментов LLM для синтетических enterprise-workflows.
+Enterprise AI Tool Gateway — локальный демонстрационный прототип контролируемого выполнения инструментов LLM для синтетических корпоративных сценариев.
 
-Ключевой тезис простой:
+Ключевой принцип:
 
 ```text
-LLM proposes.
-Backend validates.
-Tools execute only through controlled boundaries.
-Approval gates risky actions.
-Audit records meaningful lifecycle events.
-Frontend displays the controlled workflow through /api/v1.
+LLM предлагает решение.
+Сервер проверяет его.
+Инструменты выполняются только через контролируемые интерфейсы.
+Согласование ограничивает рискованные действия.
+Аудит фиксирует значимые события жизненного цикла.
+Веб-интерфейс отображает управляемый сценарий через /api/v1.
 ```
 
-Проект не является чат-ботом и не является production SaaS-продуктом. Он демонстрирует, как backend-owned contracts, policy checks, approval gates, tool boundaries и audit records могут управлять действиями, предложенными LLM.
+Проект не является чат-ботом или промышленным SaaS-продуктом. Он показывает, как серверные контракты, проверки политики, обязательное согласование, границы инструментов и записи аудита управляют действиями, предложенными LLM.
 
 ## 2. Что демонстрирует этот прототип
 
-Прототип демонстрирует инженерный паттерн для управляемого использования LLM-инструментов:
+Прототип демонстрирует инженерный подход к управляемому использованию инструментов LLM:
 
-* контролируемое выполнение инструментов LLM через runtime-логику, принадлежащую backend;
-* строгую валидацию структурированных решений provider перед выполнением инструментов;
-* зарегистрированное выполнение инструментов через `ToolRegistry` и `ToolExecutor`;
-* policy checks перед state-changing draft actions;
-* approval control для рискованных действий до их выполнения;
-* видимость tool calls, approvals и audit events в рамках конкретного run;
-* разделение между FastAPI backend `/api/v1` и React/Vite frontend;
-* детерминированное offline acceptance-тестирование поверх API surface.
+* контролируемое выполнение инструментов через серверную логику обработки;
+* строгую валидацию структурированных решений поставщика LLM до выполнения инструментов;
+* выполнение зарегистрированных инструментов через `ToolRegistry` и `ToolExecutor`;
+* проверки политики перед изменяющими действиями создания черновиков;
+* согласование рискованных действий до их выполнения;
+* просмотр вызовов инструментов, согласований и событий аудита конкретного запуска;
+* разделение серверной части FastAPI `/api/v1` и веб-интерфейса React/Vite;
+* детерминированные приёмочные проверки через API без внешней сети.
 
 Основной жизненный цикл:
 
 ```text
-request
--> backend run creation
--> provider decision
--> backend validation
--> read tools
--> policy check
--> approval if required
--> controlled draft action or controlled stop
--> audit events
--> final run outcome
+запрос
+-> создание запуска на сервере
+-> решение поставщика LLM
+-> серверная валидация
+-> инструменты чтения
+-> проверка политики
+-> согласование при необходимости
+-> разрешённое создание черновика или контролируемая остановка
+-> события аудита
+-> итоговый результат запуска
 ```
 
 ## 3. Текущее замороженное состояние прототипа
 
 Реализованные слои:
 
-* Backend: Python-пакет в `src/enterprise_ai_tool_gateway/`.
-* API: FastAPI adapter, версионированный под `/api/v1`.
-* Workflows: три синтетических enterprise-workflows:
+* Серверная часть: Python-пакет в `src/enterprise_ai_tool_gateway/`.
+* API: адаптер FastAPI с версионированием под `/api/v1`.
+* Сценарии: три синтетических корпоративных сценария —
   `ACCESS_REQUEST`, `PROCUREMENT_REQUEST` и `MAINTENANCE_REQUEST`.
-* Frontend: независимый React + TypeScript + Vite client в `frontend/` с typed RU/EN presentation layer и русским языком по умолчанию для fresh session.
-* Evals: детерминированный acceptance runner с набором из 21 кейса.
-* Persistence: локальное SQLite-хранилище через async SQLAlchemy.
-* Provider mode: по умолчанию используется детерминированный mock/fake provider path.
-* Demo runner: локальный Windows launcher с per-instance process ownership и positive frontend identity probe.
+* Веб-интерфейс: независимый клиент React + TypeScript + Vite в `frontend/` с типизированным слоем русских и английских текстов. Если язык ещё не сохранён в браузере, выбирается русский.
+* Приёмочные проверки: детерминированный механизм запуска 21 проверочного случая.
+* Хранение: локальная база SQLite через асинхронный SQLAlchemy.
+* Поставщик LLM: по умолчанию используется детерминированная заглушка.
+* Запуск демонстрации: локальный Windows-скрипт, который учитывает принадлежность процессов отдельному экземпляру запуска и явно проверяет принадлежность веб-интерфейса проекту.
 
-Реализованные backend-области включают contracts, workflow transitions, provider ports, tool registry/executor, policy decisions, approval primitives, audit redaction/events, persistence, application runtimes, FastAPI routes и evals.
+Реализованные серверные области включают контракты, переходы состояний сценариев, интерфейсы поставщиков, реестр и исполнитель инструментов, решения политики, базовые механизмы согласования, маскирование данных и события аудита, хранение, прикладные обработчики, маршруты FastAPI и приёмочные проверки.
 
-Реализованные frontend-области включают dashboard, страницы отправки workflow, представления agent run, approvals в рамках run, tool calls, audit trail, settings, API status и локальный known-run index.
+Веб-интерфейс включает обзорную панель, страницы отправки заявок, представления запусков, согласования конкретного запуска, вызовы инструментов, журнал аудита, настройки, состояние API и локальный список известных запусков.
 
-## 4. Реализованные workflows
+## 4. Реализованные сценарии
 
 ### ACCESS_REQUEST
 
-Назначение: продемонстрировать запрос на управление доступом через контролируемый gateway.
+Назначение: показать обработку запроса доступа через контролируемый шлюз.
 
 Что демонстрирует:
 
-* read checks для employee, system, access-policy и existing-ticket;
-* backend-валидацию provider decision и разрешённых access tools;
-* policy decisions перед созданием access request draft;
-* approval для высокорискованных изменений доступа, например admin access;
-* безопасное отклонение или manual review, когда synthetic policy/data checks не проходят.
+* проверки чтения данных сотрудника, системы, политики доступа и существующей заявки;
+* серверную валидацию решения поставщика и разрешённых инструментов доступа;
+* решения политики до создания черновика заявки на доступ;
+* согласование изменений доступа с высоким риском, например административного доступа;
+* безопасный отказ или ручную проверку, если проверки синтетических данных или политики не пройдены.
 
-Возможные контролируемые outcomes:
+Возможные контролируемые результаты:
 
-* завершённый synthetic access request draft;
-* ожидание approval, затем завершение или отклонение после approval resolution;
-* needs user input для отсутствующих обязательных полей;
-* needs manual review для непроверяемых данных или рисков duplicate/open-ticket;
-* rejected by policy;
-* failed validation для невалидного provider output или неизвестных tool proposals.
+* готовый синтетический черновик заявки на доступ;
+* ожидание согласования с последующим завершением или отказом по принятому решению;
+* запрос пользовательского ввода при отсутствии обязательных полей;
+* ручная проверка непроверяемых данных, дубликатов или уже открытой заявки;
+* отказ по политике;
+* ошибка валидации некорректного ответа поставщика или предложения неизвестного инструмента.
 
 Это не реальная IAM-интеграция.
 
 ### PROCUREMENT_REQUEST
 
-Назначение: продемонстрировать контроль расходов, поставщиков и бюджета через тот же gateway-паттерн.
+Назначение: показать контроль расходов, поставщиков и бюджета через тот же подход к управлению инструментами.
 
 Что демонстрирует:
 
-* synthetic checks для requester, vendor, catalog item, budget/policy и duplicate-request;
-* backend-валидацию procurement request type, domain template и tool names;
-* explicit USD-only API contract для synthetic procurement requests;
-* policy control перед созданием purchase request draft;
-* approval для high-value или approval-required draft actions;
-* manual review или rejection для blocked vendors, restricted items, budget issues, duplicates или отсутствующих synthetic data.
+* синтетические проверки заявителя, поставщика товаров или услуг, позиции каталога, бюджета, политики и повторной заявки;
+* серверную валидацию типа запроса закупки, предметного шаблона и имён инструментов;
+* явное ограничение API синтетических заявок на закупку валютой USD;
+* контроль политики до создания черновика заявки на закупку;
+* согласование дорогих закупок или действий создания черновика с обязательным согласованием;
+* ручную проверку или отказ при заблокированном поставщике, запрещённой позиции, проблемах бюджета, дубликатах или отсутствии синтетических данных.
 
-Возможные контролируемые outcomes:
+Возможные контролируемые результаты:
 
-* завершённый synthetic purchase request draft;
-* ожидание approval, затем завершение или отклонение после approval resolution;
-* needs user input для отсутствующих обязательных полей;
-* needs manual review при неопределённости synthetic data/policy;
-* rejected by policy;
-* failed validation для невалидного provider output или неизвестных tool proposals.
+* готовый синтетический черновик заявки на закупку;
+* ожидание согласования с последующим завершением или отказом по принятому решению;
+* запрос пользовательского ввода при отсутствии обязательных полей;
+* ручная проверка при неопределённости синтетических данных или политики;
+* отказ по политике;
+* ошибка валидации некорректного ответа поставщика LLM или предложения неизвестного инструмента.
 
-Это не реальный procurement, ERP, vendor или tender workflow.
+Это не реальный процесс закупок, ERP, работы с поставщиками или проведения тендера.
 
 ### MAINTENANCE_REQUEST
 
-Назначение: продемонстрировать контроль asset/severity/safety через облегчённый maintenance workflow.
+Назначение: показать контроль оборудования, серьёзности проблемы и безопасности в облегчённом сценарии технического обслуживания.
 
 Что демонстрирует:
 
-* synthetic checks для requester, asset, severity classification, duplicate-ticket и maintenance-policy;
-* canonical `MaintenanceSeverity` handling с uppercase enum values;
-* backend-валидацию maintenance request type, domain template и tool names;
-* policy control перед созданием work order draft;
-* approval для high-severity work order drafts;
-* manual review или rejection для safety concerns, critical/manual-review cases или forbidden maintenance instructions.
+* синтетические проверки заявителя, оборудования, классификации серьёзности, повторной заявки и политики обслуживания;
+* обработку канонических значений `MaintenanceSeverity` в верхнем регистре;
+* серверную валидацию типа запроса обслуживания, предметного шаблона и имён инструментов;
+* контроль политики до создания черновика наряда на работы;
+* согласование черновиков нарядов при высокой серьёзности проблемы;
+* ручную проверку или отказ при угрозах безопасности, критических ситуациях, случаях обязательной ручной проверки или запрещённых инструкциях по обслуживанию.
 
-Возможные контролируемые outcomes:
+Возможные контролируемые результаты:
 
-* завершённый synthetic work order draft;
-* ожидание approval, затем завершение или отклонение после approval resolution;
-* needs user input для отсутствующих обязательных полей;
-* needs manual review для safety или неопределённости synthetic data/policy;
-* rejected by policy;
-* failed validation для невалидного provider output или неизвестных tool proposals.
+* готовый синтетический черновик наряда на работы;
+* ожидание согласования с последующим завершением или отказом по принятому решению;
+* запрос пользовательского ввода при отсутствии обязательных полей;
+* ручная проверка при угрозах безопасности или неопределённости синтетических данных и политики;
+* отказ по политике;
+* ошибка валидации некорректного ответа поставщика LLM или предложения неизвестного инструмента.
 
-Это не реальная интеграция с CMMS, EAM или maintenance/TOIR.
+Это не реальная интеграция с CMMS, EAM или системами технического обслуживания и ремонта (ТОиР).
 
-## 5. Статус Backend/API
+## 5. Состояние серверной части и API
 
-Backend предоставляет локальный/demo FastAPI API под `/api/v1`.
+Сервер предоставляет локальный демонстрационный API FastAPI под `/api/v1`.
 
-Реализованные группы endpoint:
+Реализованные группы методов:
 
 * `GET /api/v1/health`;
 * `GET /api/v1/capabilities`;
@@ -153,39 +153,39 @@ Backend предоставляет локальный/demo FastAPI API под `/
 * `GET /api/v1/runs/{run_id}/approvals`;
 * `GET /api/v1/runs/{run_id}/audit-events`.
 
-Business outcomes моделируются как controlled run statuses, а не как generic HTTP failures. Например, outcomes rejected, manual-review, user-input и failed-validation могут возвращать HTTP 200 со статусом run, который объясняет controlled stop. HTTP errors всё ещё используются для malformed request bodies, unknown run или approval IDs, invalid approval decisions и state conflicts. Approval resolution требует непустой `decided_by`; persistence-level conditional update даёт ровно одному pending-to-terminal решению ownership, а concurrent или stale loser получает controlled `409 state_conflict` до downstream terminal mutations.
+Предметные результаты моделируются контролируемыми статусами запуска, а не общими HTTP-ошибками. Отказ, ручная проверка, запрос ввода или ошибка валидации могут возвращаться с HTTP 200 и статусом запуска, объясняющим контролируемую остановку. HTTP-ошибки по-прежнему используются для некорректных тел запросов, неизвестных идентификаторов запусков и согласований, недопустимых решений и конфликтов состояния. Обработка решения согласования требует непустой `decided_by`. Условное обновление в хранилище даёт ровно одному решению право перевести ожидающее согласование в окончательное состояние, а конкурирующий или устаревший проигравший запрос получает контролируемый `409 state_conflict` до последующих окончательных изменений.
 
-Public API responses используют redacted projection для tool payloads и approval free-text fields. Recursive marker-based redaction покрывает также high-confidence quoted/serialized credential assignments, но не является general-purpose DLP. Backend runtime objects могут содержать больше внутренних деталей, чем раскрывают public response DTOs.
+Публичные ответы API маскируют содержимое инструментов и свободные текстовые поля согласований. Рекурсивное маскирование по маркерам охватывает уверенно распознаваемые присваивания учётных данных в кавычках или сериализованном виде, но не является универсальной системой DLP. Внутренние серверные объекты могут содержать больше подробностей, чем раскрывают публичные DTO ответов.
 
-## 6. Статус Frontend
+## 6. Состояние веб-интерфейса
 
-Frontend — это независимый React/Vite client в `frontend/`. Он взаимодействует с backend только через `/api/v1` HTTP API client в `frontend/src/api/`.
+Веб-интерфейс — независимый клиент React/Vite в `frontend/`. Он обращается к серверу только через HTTP-клиент `/api/v1` в `frontend/src/api/`.
 
-UI лучше всего понимать как локальную Gateway Operations Console. Она включает:
+Это локальная консоль оператора Gateway Operations Console. Она включает:
 
-* Dashboard;
-* Workflows;
-* workflow submit pages для access, procurement и maintenance;
-* Agent Runs;
-* run detail;
-* Approvals;
-* run-scoped Tool Calls;
-* run-scoped Audit Trail;
-* Settings и API status.
+* обзорную панель;
+* каталог сценариев;
+* формы заявок на доступ, закупку и обслуживание;
+* список запусков;
+* подробности запуска;
+* согласования;
+* вызовы инструментов конкретного запуска;
+* журнал аудита конкретного запуска;
+* настройки и состояние API.
 
-Static operator-facing UI поддерживает RU и EN; fresh local/demo session использует RU, а locale switch и preference остаются browser-local presentation state и не меняют API contracts, canonical IDs/enums, raw JSON или backend-provided evidence.
+Статические элементы интерфейса оператора поддерживают русский и английский языки. Новый локальный сеанс использует русский; выбранный язык и его переключение остаются локальной настройкой отображения в браузере и не меняют контракты API, канонические идентификаторы и перечисления, исходный JSON или полученные от сервера сведения.
 
-Frontend хранит browser-local known-run index и selected run для текущей demo session, а также locale preference. Это convenience state, которое безопасно деградирует при storage failure; оно не является backend truth и не реализует global backend search, global audit search, production approval queue, разделение ролей requester/admin или выполнение business logic. Aggregate reads различают complete, partial и unavailable data, failed refresh оставляет stale/error evidence, а run/approval data, controls, drafts и async feedback привязаны к identity текущего route entity.
+Интерфейс хранит локальный список известных браузеру запусков, выбранный запуск и язык текущего демонстрационного сеанса. Это вспомогательное состояние, которое сохраняет работоспособность при ошибках хранилища. Оно не является источником истины о сервере и не реализует глобальный серверный поиск, общий поиск по аудиту, промышленную очередь согласований, разделение ролей заявителя и администратора или предметную логику. Сводные чтения различают полные, частичные и недоступные данные. Неудачное обновление оставляет признаки устаревших данных или ошибки. Данные запусков и согласований, элементы управления, черновики и асинхронная обратная связь привязаны к конкретной сущности текущего маршрута.
 
-Это не production requester portal, operator portal, admin portal или monitoring product.
+Это не промышленный портал заявителя, оператора или администратора и не система мониторинга.
 
-## 7. Статус Provider/model
+## 7. Состояние поставщиков LLM и моделей
 
-Default demo и test path используют детерминированные mock/fake providers. Endpoint API capabilities сообщает `provider_mode` как `mock`.
+Стандартные демонстрационные и тестовые сценарии используют детерминированные заглушки поставщиков. Метод возможностей API сообщает `provider_mode` как `mock`.
 
-Real-provider smoke не является default demo path и должен оставаться явным и ручным. Silent fallback с failed real provider на mock отсутствует.
+Базовая проверка реального поставщика не входит в стандартную демонстрацию и должна запускаться явно и вручную. Скрытой подмены отказавшего реального поставщика заглушкой нет.
 
-API capabilities показывают model selection как disabled:
+Возможности API показывают, что выбор модели отключён:
 
 ```text
 model_selection.enabled = false
@@ -193,85 +193,75 @@ active_profile = "mock"
 available_profiles = ["mock"]
 ```
 
-OpenRouter, Yandex, provider marketplace, provider fallback routing, streaming, quota/billing и frontend model selector не реализованы.
+OpenRouter, Yandex, каталог поставщиков, резервная маршрутизация между ними, потоковые ответы, квоты, оплата и выбор модели в интерфейсе не реализованы.
 
-## 8. Статус Data, audit и safety
+## 8. Состояние данных, аудита и защитных механизмов
 
-Прототип использует локальное SQLite-хранилище для gateway records:
+Прототип использует локальное хранилище SQLite для записей шлюза:
 
-* agent runs;
-* validated LLM decisions;
-* tool calls;
-* approvals;
-* audit events.
+* запусков;
+* проверенных решений LLM;
+* вызовов инструментов;
+* согласований;
+* событий аудита.
 
-Tool calls, approvals и audit events привязаны к run и доступны через public API read endpoints. Audit events фиксируют значимые lifecycle events, такие как run creation, provider selection, decision validation, tool execution, policy checks, approval requests/decisions, manual review, rejection, completion и failure.
+Вызовы инструментов, согласования и события аудита привязаны к запуску и доступны через публичные методы чтения API. Аудит фиксирует значимые события жизненного цикла: создание запуска, выбор поставщика, валидацию решения, выполнение инструментов, проверки политики, запросы и решения согласования, ручную проверку, отказ, завершение и ошибки.
 
-Safety-related behavior в замороженном прототипе включает:
+Защитные механизмы замороженного прототипа включают:
 
-* public API redaction для tool payloads и approval text;
-* controlled public projection для run, tool, approval и audit records;
-* approval safety floor, чтобы `AUTO_APPROVE` не обходил high-risk, critical-risk или default-approval state-changing controls;
-* atomic pending-to-terminal approval ownership с controlled conflict для concurrent loser;
-* строгую domain-template validation перед dispatching workflow actions;
-* USD-only validation для synthetic procurement submit requests;
-* canonical maintenance severity validation через `MaintenanceSeverity`;
-* workflow submit bodies не принимают provider/model selection fields;
-* public API responses не должны содержать secrets.
+* маскирование содержимого инструментов и текста согласований в публичном API;
+* контролируемое публичное представление записей запусков, инструментов, согласований и аудита;
+* обязательный минимум согласования: `AUTO_APPROVE` не обходит ограничения для изменяющих действий с высоким или критическим риском либо с обязательным согласованием по умолчанию;
+* атомарное получение права перевести ожидающее согласование в окончательное состояние с контролируемым конфликтом для проигравшего конкурирующего запроса;
+* строгую проверку предметного шаблона до передачи действий на выполнение;
+* ограничение синтетических заявок на закупку валютой USD;
+* проверку канонической серьёзности обслуживания через `MaintenanceSeverity`;
+* запрет полей выбора поставщика и модели в теле заявки;
+* требование не раскрывать секреты в публичных ответах API.
 
 ## 9. Что намеренно не реализовано
 
 Прототип намеренно не реализует:
 
-* production authentication;
-* RBAC;
-* tenants;
-* real enterprise connectors;
+* промышленную аутентификацию;
+* ролевой доступ (RBAC);
+* изоляцию организаций;
+* реальные подключения к корпоративным системам;
 * реальные интеграции IAM, ERP, 1C, Jira, CRM, CMMS или EAM;
-* provider/model selection;
-* global run search или history;
-* global audit search;
-* deployment или hosting;
-* payment;
-* desktop app;
-* workflow builder;
-* policy editor;
-* organization administration;
-* production background workers;
-* production observability;
-* production security hardening.
+* выбор поставщика и модели;
+* глобальный поиск и историю запусков;
+* общий поиск по аудиту;
+* развёртывание и размещение на сервере;
+* оплату;
+* настольное приложение;
+* конструктор сценариев;
+* редактор политик;
+* администрирование организаций;
+* промышленные фоновые обработчики;
+* наблюдаемость промышленной системы;
+* подготовку безопасности к промышленной эксплуатации.
 
 ## 10. Будущие направления
 
-Потенциальный future backlog, не являющийся committed scope:
+Возможные направления развития, не входящие в согласованный объём работ:
 
-* реальные интеграции через API или MCP-style boundaries;
-* provider profiles и explicit provider selection;
-* authentication, RBAC и tenant isolation;
-* deployment packaging и hosted environments;
-* более развитые admin/operator UI surfaces;
-* workflow-builder concepts;
-* monitoring, analytics и operational reporting.
+* реальные интеграции через API или интерфейсы в стиле MCP;
+* профили поставщиков LLM и явный выбор поставщика;
+* аутентификация, RBAC и изоляция организаций;
+* подготовка пакета развёртывания и размещаемых окружений;
+* более развитый интерфейс администратора и оператора;
+* идеи конструктора сценариев;
+* мониторинг, аналитика и операционная отчётность.
 
-Любое будущее расширение должно сохранять control model: backend validation, explicit tool boundaries, policy checks, approval gates и auditability.
+Любое будущее расширение должно сохранять модель контроля: серверную валидацию, явные границы инструментов, проверки политики, обязательное согласование и проверяемый аудит.
 
 ## 11. Связанные документы
 
-Существующие companion documents:
+Сопутствующая документация:
 
-* [PROJECT_MAP.md](PROJECT_MAP.md) - architecture map, package ownership,
-  runtime ownership и entrypoints.
-
-* [README.md](../README.md) - public quickstart и validation commands.
-
-* [ARCHITECTURE.md](ARCHITECTURE.md) - architecture, lifecycle, boundaries,
-  failure model и limitations.
-
-* [API_AND_EVALS.md](API_AND_EVALS.md) - public API surface, controlled
-  outcomes и deterministic eval suite.
-
-* [DEMO_WALKTHROUGH.md](DEMO_WALKTHROUGH.md) - local demo walkthrough для
-  backend, frontend и eval runner.
-
-* [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) - setup, validation и safe
-  development workflow.
+* [PROJECT_MAP.md](PROJECT_MAP.md) — карта архитектуры, ответственность пакетов и обработчиков, точки входа.
+* [README.md](../README.md) — быстрый старт и команды проверки.
+* [ARCHITECTURE.md](ARCHITECTURE.md) — архитектура, жизненный цикл, границы, модель ошибок и ограничения.
+* [API_AND_EVALS.md](API_AND_EVALS.md) — публичный API, контролируемые результаты и детерминированные приёмочные проверки.
+* [DEMO_WALKTHROUGH.md](DEMO_WALKTHROUGH.md) — пошаговая локальная демонстрация серверной части, веб-интерфейса и приёмочных проверок.
+* [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) — настройка, проверки и безопасная разработка.

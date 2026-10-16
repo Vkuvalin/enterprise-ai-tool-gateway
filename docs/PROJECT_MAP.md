@@ -2,24 +2,24 @@
 
 ## 1. Обзор репозитория
 
-`enterprise-ai-tool-gateway` содержит локальный/demo-прототип Enterprise AI Tool Gateway. Репозиторий организован вокруг Python backend gateway, FastAPI adapter `/api/v1`, детерминированных API acceptance evals, независимого React/Vite frontend и финальной проектной документации.
+`enterprise-ai-tool-gateway` содержит локальный демонстрационный прототип Enterprise AI Tool Gateway. В репозитории находятся серверная часть шлюза на Python, адаптер FastAPI `/api/v1`, детерминированные приёмочные проверки API, независимый веб-интерфейс на React/Vite и итоговая документация проекта.
 
-Backend демонстрирует контролируемое использование инструментов, предложенных LLM: provider output валидируется backend contracts, инструменты выполняются только через зарегистрированные boundaries, state-changing draft actions проходят через policy и approval controls, а records, привязанные к run, сохраняются для последующего readback.
+Сервер демонстрирует контролируемое использование инструментов, предложенных LLM: ответы поставщика модели проверяются по серверным контрактам, инструменты выполняются только через предусмотренные интерфейсы, создание черновиков проходит проверки политики выполнения и согласования, а записи каждого запуска сохраняются для последующего чтения.
 
 Верхнеуровневые области:
 
-| Путь                              | Зона ответственности                                                                                                        |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `src/enterprise_ai_tool_gateway/` | Python backend package для contracts, runtimes, tools, policy, approval, audit, persistence, providers, API и eval support. |
-| `frontend/`                       | Независимый локальный web client на React, TypeScript и Vite.                                                               |
-| `tests/`                          | Offline deterministic Python test suite для backend, API, eval и boundary behavior.                                         |
-| `scripts/`                        | Command entrypoints, включая deterministic eval runner, safe local demo runner и explicit smoke utilities.                  |
-| `docs/`                           | Публичная проектная документация и source-of-truth companion docs.                                                          |
-| `pyproject.toml`                  | Метаданные Python package, Python `>=3.14`, runtime dependencies и tool configuration.                                      |
+| Путь | Зона ответственности |
+| --- | --- |
+| `src/enterprise_ai_tool_gateway/` | Серверный пакет Python: контракты, исполнение сценариев, инструменты, политика выполнения, согласования, журнал аудита, хранение, поставщики моделей, API и поддержка приёмочных проверок. |
+| `frontend/` | Независимый локальный веб-интерфейс на React, TypeScript и Vite. |
+| `tests/` | Детерминированные автономные тесты Python для серверной части, API, приёмочных проверок и границ ответственности. |
+| `scripts/` | Командные точки входа: детерминированные приёмочные проверки, безопасный запуск локальной демонстрации и явно вызываемые диагностические проверки. |
+| `docs/` | Публичная документация проекта, включая основные документы с устойчивыми сведениями о проекте. |
+| `pyproject.toml` | Метаданные пакета Python, требование Python `>=3.14`, зависимости приложения и настройки инструментов. |
 
 ```mermaid
 flowchart TB
-    Repo["Repository"]
+    Repo["Репозиторий"]
 
     Repo --> Backend["src/enterprise_ai_tool_gateway/"]
     Repo --> Frontend["frontend/"]
@@ -27,322 +27,322 @@ flowchart TB
     Repo --> Scripts["scripts/"]
     Repo --> Docs["docs/"]
 
-    Backend --> API["api/http<br/>FastAPI adapter"]
-    Backend --> App["application<br/>workflow runtimes"]
-    Backend --> Contracts["contracts<br/>shared enums and schemas"]
-    Backend --> Domain["access / procurement / maintenance_lite<br/>synthetic workflow packages"]
-    Backend --> Control["policy / approval / tools / audit<br/>control boundaries"]
-    Backend --> DB["db<br/>SQLAlchemy models and repository"]
-    Backend --> Provider["llm / mcp<br/>provider and MCP boundaries"]
-    Backend --> Evals["evals<br/>acceptance cases and runner logic"]
+    Backend --> API["api/http<br/>адаптер FastAPI"]
+    Backend --> App["application<br/>исполнение сценариев"]
+    Backend --> Contracts["contracts<br/>общие перечисления и схемы"]
+    Backend --> Domain["access / procurement / maintenance_lite<br/>пакеты синтетических сценариев"]
+    Backend --> Control["policy / approval / tools / audit<br/>границы контроля"]
+    Backend --> DB["db<br/>модели SQLAlchemy и репозиторий"]
+    Backend --> Provider["llm / mcp<br/>интерфейсы поставщиков моделей и MCP"]
+    Backend --> Evals["evals<br/>приёмочные случаи и их выполнение"]
 
-    Frontend --> FEApi["src/api<br/>/api/v1 HTTP client"]
-    Frontend --> Pages["src/pages<br/>route-level screens"]
-    Frontend --> Features["src/features<br/>workflow/run/approval/audit modules"]
-    Frontend --> Components["src/components<br/>shared UI building blocks"]
-    Frontend --> State["src/state<br/>local known-run index"]
-    Frontend --> I18n["src/i18n<br/>typed RU/EN presentation"]
-    Frontend --> Styles["src/styles<br/>tokens and global CSS"]
+    Frontend --> FEApi["src/api<br/>HTTP-клиент /api/v1"]
+    Frontend --> Pages["src/pages<br/>экраны маршрутов"]
+    Frontend --> Features["src/features<br/>сценарии, запуски, согласования, аудит"]
+    Frontend --> Components["src/components<br/>общие компоненты интерфейса"]
+    Frontend --> State["src/state<br/>локальный индекс известных запусков"]
+    Frontend --> I18n["src/i18n<br/>типизированное представление RU/EN"]
+    Frontend --> Styles["src/styles<br/>токены и общие стили CSS"]
 
-    Scripts --> RunEval["run_eval.py<br/>deterministic acceptance runner"]
-    Scripts --> DemoRunner["demo runner scripts<br/>local Windows launcher"]
+    Scripts --> RunEval["run_eval.py<br/>детерминированные приёмочные проверки"]
+    Scripts --> DemoRunner["скрипты демонстрации<br/>локальный запуск в Windows"]
 
-    Docs --> PublicDocs["final public docs<br/>context / architecture / API / demo / development"]
-    Tests --> TestAreas["contracts / runtimes / API / audit / evals / providers"]
+    Docs --> PublicDocs["публичная документация<br/>контекст, архитектура, API, демонстрация, разработка"]
+    Tests --> TestAreas["контракты, сценарии, API, аудит, приёмка, поставщики моделей"]
 
-    API -. "calls into" .-> App
-    App -. "uses" .-> Contracts
-    App -. "uses" .-> Control
-    App -. "persists through" .-> DB
-    App -. "validates provider output from" .-> Provider
-    FEApi -. "HTTP only" .-> API
+    API -. "вызывает" .-> App
+    App -. "использует" .-> Contracts
+    App -. "использует" .-> Control
+    App -. "сохраняет через" .-> DB
+    App -. "проверяет ответы от" .-> Provider
+    FEApi -. "только HTTP" .-> API
 ```
 
-## 2. Карта backend package
+## 2. Карта серверного пакета
 
-Основные backend packages в `src/enterprise_ai_tool_gateway/`:
+Основные пакеты в `src/enterprise_ai_tool_gateway/`:
 
-| Package             | Зона ответственности                                                                                                                                 |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contracts/`        | Общие enums и Pydantic contracts для request types, domain templates, run records, LLM decisions, tools, approvals и audit events.                   |
-| `workflow/`         | Чистые helpers для workflow event/status transitions для `AgentRunStatus`.                                                                           |
-| `llm/`              | Provider port, deterministic providers, structured-output parsing, safe provider errors, optional GigaChat support и deferred YandexGPT spike stubs. |
-| `mcp/`              | Опциональная локальная MCP-style boundary и smoke-support utilities; не заменяет `ToolRegistry`.                                                     |
-| `tools/`            | Generic boundary `ToolDefinition`, `ToolRegistry` и `ToolExecutor` с Pydantic input/output validation.                                               |
-| `policy/`           | Policy request/decision contracts и default tool-policy evaluator.                                                                                   |
-| `approval/`         | Approval requirement и approval decision primitives.                                                                                                 |
-| `audit/`            | Audit event creation и recursive payload redaction helpers.                                                                                          |
-| `db/`               | Async SQLAlchemy models, schema bootstrap, session factory и repository facade для локального SQLite persistence.                                    |
-| `demo_domain/`      | Детерминированные synthetic access, procurement и maintenance data, используемые demo tools.                                                         |
-| `access/`           | Demo schemas для access workflow и synthetic access tool definitions.                                                                                |
-| `procurement/`      | Demo schemas для procurement workflow и synthetic procurement tool definitions.                                                                      |
-| `maintenance_lite/` | Demo schemas для maintenance-lite и synthetic maintenance tool definitions.                                                                          |
-| `application/`      | Workflow runtimes, shared runtime helpers и application DTOs.                                                                                        |
-| `api/http/`         | FastAPI inbound adapter, routes, API schemas, mappers, dependencies и error normalization.                                                           |
-| `evals/`            | Deterministic API acceptance case definitions, dependency overrides, runner и result models.                                                         |
-
-## 3. Contracts
-
-`src/enterprise_ai_tool_gateway/contracts/` определяет общие backend shapes.
-
-| File          | Зона ответственности                                                                                                                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enums.py`    | Stable string enums для request types, domain templates, run statuses, risk levels, tool types, tool-call statuses, approval statuses, policy decisions, approval modes, audit events и provider names. |
-| `schemas.py`  | Pydantic contracts для agent runs, proposed tool calls, LLM decisions, tool calls, approvals и audit events.                                                                                            |
-| `__init__.py` | Public contract exports.                                                                                                                                                                                |
-
-Важные группы contracts:
-
-| Область contract                  | Примеры                                                                                     |
-| --------------------------------- | ------------------------------------------------------------------------------------------- |
-| Request and domain classification | `RequestType`, `DomainTemplate`, `LLMDecisionPayload`.                                      |
-| Run lifecycle                     | `AgentRunCreate`, `AgentRunRead`, `AgentRunStatus`.                                         |
-| Tool boundary                     | `ProposedToolCall`, `ToolCallCreate`, `ToolCallRead`, `ToolType`, `ToolCallStatus`.         |
-| Approval and policy               | `ApprovalCreate`, `ApprovalRead`, `ApprovalMode`, `ApprovalStatus`, `PolicyDecisionStatus`. |
-| Audit                             | `AuditEventCreate`, `AuditEventRead`, `AuditEventType`.                                     |
-
-Boundary rule: contracts определяют общие data shapes и enum vocabularies. Они не должны владеть runtime orchestration, policy decisions, provider calls, database queries, FastAPI routing или frontend behavior.
-
-## 4. Application runtimes
-
-`src/enterprise_ai_tool_gateway/application/` отвечает за backend orchestration для реализованных demo workflows.
-
-| File                          | Зона ответственности                                                                                                                                                                               |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `access_runtime.py`           | Runtime `ACCESS_REQUEST`: создаёт runs, вызывает provider, валидирует access decisions, выполняет access tools, применяет policy, создаёт/resolves approvals и сохраняет records.                  |
-| `procurement_runtime.py`      | Runtime `PROCUREMENT_REQUEST`: координирует synthetic requester/vendor/catalog/budget/duplicate checks и создание draft purchase request.                                                          |
-| `maintenance_lite_runtime.py` | Runtime `MAINTENANCE_REQUEST`: координирует synthetic requester/asset/severity/duplicate/policy checks и создание draft work order.                                                                |
-| `demo_workflow.py`            | Общая runtime-механика: missing-field checks, proposed-tool validation, tool execution/persistence, audit persistence, policy request construction, approval handling и runtime record collection. |
-| `dtos.py`                     | Application-layer request/result DTOs для workflow submit и approval resolution use cases.                                                                                                         |
-
-Application runtimes владеют workflow decisions и use-case orchestration. Они решают, какие contracts, tools, policy checks, approvals, audit events и repository operations используются для одного run.
-
-Boundary rules:
-
-* API routes вызывают application runtimes; routes не владеют workflow logic.
-* Application runtimes валидируют provider decisions до принятия любого proposed tool plan.
-* Application runtimes должны выполнять tools через registry/executor boundary.
-* Application runtimes могут сохранять records через `GatewayRepository`, но repository не определяет workflow outcomes.
-
-## 5. Domain workflow packages
-
-Workflow-specific packages владеют только synthetic demo schemas и tools.
-
-| Package             | Зона ответственности                                                                                                               |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `access/`           | Access-level schemas, employee/system/access-policy/ticket checks и `create_access_request_draft`.                                 |
-| `procurement/`      | Procurement schemas, requester/vendor/catalog/budget/duplicate checks, procurement policy check и `create_purchase_request_draft`. |
-| `maintenance_lite/` | Maintenance schemas, requester/asset/severity/duplicate checks, maintenance policy check и `create_work_order_draft`.              |
+| Пакет | Зона ответственности |
+| --- | --- |
+| `contracts/` | Общие перечисления и контракты Pydantic для типов запросов, предметных шаблонов, запусков, решений LLM, инструментов, согласований и событий аудита. |
+| `workflow/` | Чистые вспомогательные функции переходов между событиями и статусами сценария для `AgentRunStatus`. |
+| `llm/` | Интерфейс поставщика модели, детерминированные заглушки, разбор структурированных ответов, безопасные ошибки, необязательная поддержка GigaChat и отложенные экспериментальные заготовки YandexGPT. |
+| `mcp/` | Необязательный локальный интерфейс в стиле MCP и диагностические утилиты; не заменяет `ToolRegistry`. |
+| `tools/` | Общий механизм `ToolDefinition`, `ToolRegistry` и `ToolExecutor` с проверкой входных и выходных данных через Pydantic. |
+| `policy/` | Контракты запросов и решений политики выполнения, а также стандартная оценка политики для инструментов. |
+| `approval/` | Базовые требования согласования и решения по ним. |
+| `audit/` | Создание событий аудита и рекурсивное маскирование содержимого. |
+| `db/` | Асинхронные модели SQLAlchemy, создание схемы, фабрика сессий и фасад репозитория для локального хранения в SQLite. |
+| `demo_domain/` | Детерминированные синтетические данные доступа, закупок и обслуживания для демонстрационных инструментов. |
+| `access/` | Демонстрационные схемы сценария доступа и определения его синтетических инструментов. |
+| `procurement/` | Демонстрационные схемы сценария закупок и определения его синтетических инструментов. |
+| `maintenance_lite/` | Демонстрационные схемы упрощённого сценария обслуживания и определения его синтетических инструментов. |
+| `application/` | Исполнение сценариев, общие вспомогательные функции и DTO прикладного слоя. |
+| `api/http/` | Входной адаптер FastAPI: маршруты, схемы API, преобразования данных, зависимости и нормализация ошибок. |
+| `evals/` | Детерминированные приёмочные случаи API, подмена зависимостей, выполнение проверок и модели результатов. |
+
+## 3. Контракты
+
+`src/enterprise_ai_tool_gateway/contracts/` определяет общие структуры данных серверной части.
+
+| Файл | Зона ответственности |
+| --- | --- |
+| `enums.py` | Стабильные строковые перечисления для типов запросов, предметных шаблонов, статусов запуска, уровней риска, типов инструментов, статусов вызова инструментов и согласований, решений политики, режимов согласования, событий аудита и имён поставщиков моделей. |
+| `schemas.py` | Контракты Pydantic для запусков агента, предложенных вызовов инструментов, решений LLM, выполненных вызовов, согласований и событий аудита. |
+| `__init__.py` | Публичный экспорт контрактов. |
+
+Основные группы контрактов:
+
+| Область | Примеры |
+| --- | --- |
+| Классификация запроса и предметной области | `RequestType`, `DomainTemplate`, `LLMDecisionPayload`. |
+| Жизненный цикл запуска | `AgentRunCreate`, `AgentRunRead`, `AgentRunStatus`. |
+| Интерфейс инструментов | `ProposedToolCall`, `ToolCallCreate`, `ToolCallRead`, `ToolType`, `ToolCallStatus`. |
+| Согласования и политика выполнения | `ApprovalCreate`, `ApprovalRead`, `ApprovalMode`, `ApprovalStatus`, `PolicyDecisionStatus`. |
+| Аудит | `AuditEventCreate`, `AuditEventRead`, `AuditEventType`. |
+
+Граница ответственности: контракты задают общие структуры данных и наборы значений перечислений. Они не управляют исполнением сценариев, решениями политики, вызовами поставщиков моделей, запросами к базе данных, маршрутизацией FastAPI или поведением веб-интерфейса.
+
+## 4. Исполнение сценариев в прикладном слое
+
+`src/enterprise_ai_tool_gateway/application/` координирует серверное исполнение реализованных демонстрационных сценариев.
+
+| Файл | Зона ответственности |
+| --- | --- |
+| `access_runtime.py` | Исполнение `ACCESS_REQUEST`: создаёт запуски, вызывает поставщика модели, проверяет решения по доступу, выполняет инструменты, применяет политику, создаёт и обрабатывает согласования, сохраняет записи. |
+| `procurement_runtime.py` | Исполнение `PROCUREMENT_REQUEST`: координирует синтетические проверки инициатора, поставщика, каталога, бюджета и дубликатов, а также создание черновика заявки на закупку. |
+| `maintenance_lite_runtime.py` | Исполнение `MAINTENANCE_REQUEST`: координирует синтетические проверки инициатора, оборудования, серьёзности проблемы, дубликатов и политики, а также создание черновика наряда на работы. |
+| `demo_workflow.py` | Общая механика: поиск недостающих полей, проверка предложенных инструментов, выполнение и сохранение вызовов, сохранение аудита, формирование запросов политики, обработка согласований и сбор записей запуска. |
+| `dtos.py` | DTO запросов и результатов прикладного слоя для отправки заявки и обработки решения по согласованию. |
+
+Прикладной слой принимает решения по сценарию и координирует выполнение пользовательского запроса. Он определяет, какие контракты, инструменты, проверки политики, согласования, события аудита и операции репозитория используются в отдельном запуске.
+
+Границы ответственности:
+
+* Маршруты API вызывают прикладной слой, но не содержат логику сценариев.
+* Прикладной слой проверяет решения поставщика модели до принятия любого предложенного плана инструментов.
+* Прикладной слой выполняет инструменты через реестр и исполнитель.
+* Прикладной слой может сохранять записи через `GatewayRepository`, но репозиторий не определяет исход сценария.
+
+## 5. Пакеты предметных сценариев
+
+Эти пакеты содержат только синтетические демонстрационные схемы и инструменты своих сценариев.
+
+| Пакет | Зона ответственности |
+| --- | --- |
+| `access/` | Схемы доступа, проверки сотрудника, системы, политики доступа и заявки, а также `create_access_request_draft`. |
+| `procurement/` | Схемы закупок, проверки инициатора, поставщика, каталога, бюджета и дубликатов, проверка политики закупок и `create_purchase_request_draft`. |
+| `maintenance_lite/` | Схемы обслуживания, проверки инициатора, оборудования, серьёзности проблемы и дубликатов, проверка политики обслуживания и `create_work_order_draft`. |
 
-Эти packages регистрируют объекты `ToolDefinition` в `ToolRegistry`. Их state-changing tools создают только synthetic drafts. Они не реализуют реальные IAM, ERP, procurement, purchasing, CMMS, EAM или maintenance connectors.
-
-`src/enterprise_ai_tool_gateway/demo_domain/` содержит детерминированные in-memory demo data, используемые этими tools. Он представляет будущие external sources, не реализуя реальные enterprise integrations.
-
-Boundary rules:
-
-* Domain packages не должны владеть API routing, provider selection, approval resolution, persistence policy, workflow state transitions или HTTP concerns.
-* Domain tools должны оставаться registered backend tools, а не прямыми frontend или LLM actions.
-* Domain-specific database tables для этих synthetic workflows не реализованы.
-
-## 6. API layer
-
-`src/enterprise_ai_tool_gateway/api/http/` — это FastAPI adapter поверх `/api/v1`.
-
-| Area              | Зона ответственности                                                                                 |
-| ----------------- | ---------------------------------------------------------------------------------------------------- |
-| `app.py`          | App factory, lifespan setup, SQLite schema bootstrap и `/api/v1` router assembly.                    |
-| `routes/`         | HTTP endpoints для health, capabilities, workflow submit, approval resolution и run-scoped readback. |
-| `schemas/`        | API request/response DTOs для public HTTP payloads.                                                  |
-| `mappers.py`      | Mapping между API DTOs, application DTOs и redacted public response DTOs.                            |
-| `dependencies.py` | Request-scoped DB session, repository и runtime dependency wiring.                                   |
-| `errors.py`       | HTTP error helpers и generic exception handling.                                                     |
-
-Реализованные локальные API endpoints:
-
-| Method and path                                | Назначение                                                                   |
-| ---------------------------------------------- | ---------------------------------------------------------------------------- |
-| `GET /api/v1/health`                           | Local health response.                                                       |
-| `GET /api/v1/capabilities`                     | Supported request types, approval modes и disabled model-selection metadata. |
-| `POST /api/v1/access-requests`                 | Отправить access workflow request.                                           |
-| `POST /api/v1/procurement-requests`            | Отправить procurement workflow request.                                      |
-| `POST /api/v1/maintenance-requests`            | Отправить maintenance-lite workflow request.                                 |
-| `POST /api/v1/approvals/{approval_id}/resolve` | Resolve pending run-scoped approval.                                         |
-| `GET /api/v1/runs/{run_id}`                    | Прочитать run detail с related records.                                      |
-| `GET /api/v1/runs/{run_id}/tool-calls`         | Прочитать run-scoped tool calls.                                             |
-| `GET /api/v1/runs/{run_id}/approvals`          | Прочитать run-scoped approvals.                                              |
-| `GET /api/v1/runs/{run_id}/audit-events`       | Прочитать run-scoped audit events.                                           |
-
-Boundary rules:
-
-* API — inbound adapter, а не владелец business logic.
-* API routes выполняют mapping requests/responses и wire dependencies.
-* API routes не должны напрямую выполнять tools, напрямую оценивать policy, самостоятельно создавать approval decisions или мутировать workflow state вне вызовов application runtime.
-* Public API responses должны проходить через safe mappers/projections.
+Пакеты регистрируют объекты `ToolDefinition` в `ToolRegistry`. Их изменяющие состояние инструменты создают только синтетические черновики. Реальных интеграций с IAM, ERP, системами закупок, CMMS, EAM или обслуживания здесь нет.
+
+`src/enterprise_ai_tool_gateway/demo_domain/` содержит детерминированные демонстрационные данные в памяти для этих инструментов. Он представляет будущие внешние источники, но не реализует интеграции с корпоративными системами.
+
+Границы ответственности:
+
+* Предметные пакеты не управляют маршрутизацией API, выбором поставщика модели, обработкой согласований, правилами хранения, переходами состояния сценария или HTTP.
+* Предметные инструменты остаются зарегистрированными серверными инструментами; веб-интерфейс и LLM не вызывают их напрямую.
+* Отдельные предметные таблицы базы данных для синтетических сценариев не реализованы.
+
+## 6. Слой API
+
+`src/enterprise_ai_tool_gateway/api/http/` — адаптер FastAPI для `/api/v1`.
+
+| Область | Зона ответственности |
+| --- | --- |
+| `app.py` | Фабрика приложения, настройка жизненного цикла, создание схемы SQLite и сборка маршрутизатора `/api/v1`. |
+| `routes/` | HTTP-маршруты проверки работоспособности, возможностей API, отправки заявок, обработки согласований и чтения записей отдельных запусков. |
+| `schemas/` | DTO запросов и ответов публичного HTTP API. |
+| `mappers.py` | Преобразования между DTO API, DTO прикладного слоя и публичными DTO ответов с маскированием чувствительных данных. |
+| `dependencies.py` | Сессия БД на время запроса, репозиторий и подключение зависимостей прикладного слоя. |
+| `errors.py` | Вспомогательные функции HTTP-ошибок и общая обработка исключений. |
+
+Реализованные локальные маршруты API:
+
+| Метод и путь | Назначение |
+| --- | --- |
+| `GET /api/v1/health` | Проверить работоспособность локального API. |
+| `GET /api/v1/capabilities` | Получить поддерживаемые типы запросов, режимы согласования и сведения об отключённом выборе модели. |
+| `POST /api/v1/access-requests` | Отправить заявку на доступ. |
+| `POST /api/v1/procurement-requests` | Отправить заявку на закупку. |
+| `POST /api/v1/maintenance-requests` | Отправить заявку на обслуживание. |
+| `POST /api/v1/approvals/{approval_id}/resolve` | Принять решение по ожидающему согласованию отдельного запуска. |
+| `GET /api/v1/runs/{run_id}` | Прочитать сведения о запуске и связанные записи. |
+| `GET /api/v1/runs/{run_id}/tool-calls` | Прочитать вызовы инструментов запуска. |
+| `GET /api/v1/runs/{run_id}/approvals` | Прочитать согласования запуска. |
+| `GET /api/v1/runs/{run_id}/audit-events` | Прочитать события аудита запуска. |
+
+Границы ответственности:
+
+* API — входной адаптер; бизнес-логика находится в прикладном слое.
+* Маршруты API преобразуют запросы и ответы, подключают зависимости.
+* Маршруты API не выполняют инструменты, не оценивают политику, не принимают решения по согласованию и не меняют состояние сценария вне вызовов прикладного слоя.
+* Публичные ответы API проходят через безопасные преобразования и проекции данных.
 
-## 7. Policy / approval / tools / audit
-
-Control foundation разделён между специализированными packages.
-
-| Package     | Зона ответственности                                                                                                                                                                                                |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `policy/`   | `PolicyCheckRequest`, `PolicyDecision` и `evaluate_default_tool_policy`. Default policy возвращает allowed, requires-approval или manual-review decisions на основе tool type, risk, approval mode и tool metadata. |
-| `approval/` | `ApprovalRequirement`, `ApprovalDecision`, terminal/granted helpers и approval primitive validation.                                                                                                                |
-| `tools/`    | `ToolRegistry`, `ToolDefinition`, `ToolExecutor`, duplicate/unknown tool errors, Pydantic input/output validation и state-changing execution authorization.                                                         |
-| `audit/`    | `create_audit_event`, recursive payload redaction, sensitive-key/value detection и string truncation.                                                                                                               |
-
-Текущие safety facts:
-
-* `ToolRegistry` — canonical internal tool boundary.
-* `ToolExecutor` блокирует non-read-only tools, если execution явно не authorized.
-* Unknown tools приводят к validation failure; runtimes не угадывают и не autocorrect tool names.
-* Default policy включает `AUTO_APPROVE` safety floor: critical risk переводится в manual review, high-risk state-changing calls всё равно требуют approval, а tools, помеченные как approval-required by default, всё равно требуют approval.
-* Public projection усилена за счёт mapping tool input/output payloads и approval free-text fields через redaction helpers перед API response.
-* Approval resolve request требует непустой `decided_by`; persistence conditional update назначает единственного pending-to-terminal owner, а concurrent loser получает controlled `409 state_conflict` до downstream terminal mutations.
-* Audit event creation выполняет recursive marker-based redaction payloads до persistence, включая high-confidence quoted/serialized credential assignments; это не general-purpose DLP.
-
-Boundary rules:
-
-* `policy/` определяет только policy outcomes; он не выполняет tools, не пишет в persistence и не мутирует workflow state.
-* `approval/` определяет только approval primitives; application runtimes решают, как approvals влияют на runs.
-* `tools/` владеет только механикой execution boundary; он не владеет LLM reasoning, HTTP routing или workflow orchestration.
-* `audit/` создаёт redacted audit contracts; он не владеет long-term storage или external log shipping.
-
-## 8. Persistence
-
-`src/enterprise_ai_tool_gateway/db/` отвечает за локальное SQLite persistence через async SQLAlchemy.
-
-| File            | Зона ответственности                                                                   |
-| --------------- | -------------------------------------------------------------------------------------- |
-| `models.py`     | SQLAlchemy models для agent runs, LLM decisions, tool calls, approvals и audit events. |
-| `repository.py` | `GatewayRepository`, read/write methods и model-to-contract mapping.                   |
-| `session.py`    | Async engine/session factory helpers и SQLite foreign-key configuration.               |
-| `bootstrap.py`  | Schema creation helper, используемый local API app и tests.                            |
-| `base.py`       | Declarative base.                                                                      |
-
-Persisted record types:
-
-* agent runs;
-* validated LLM decisions;
-* tool calls;
-* approvals;
-* audit events.
-
-Boundary rule: `db/` сохраняет facts, выбранные runtime layers. Он не определяет policy, не authorizes tools, не валидирует provider semantics, не выбирает general workflow outcomes и не выбирает public API projection rules. `GatewayRepository` владеет только узким atomic pending-to-terminal approval claim, который не допускает двух terminal owners.
-
-## 9. Provider/MCP boundaries
-
-Provider code находится в `src/enterprise_ai_tool_gateway/llm/`.
-
-| File                   | Зона ответственности                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `base.py`              | Provider port, decision request/response contracts, safe provider error hierarchy и real-smoke guard helpers. |
-| `mock.py`              | Deterministic mock provider, используемый default tests и local/demo paths.                                   |
-| `static.py`            | Static decision provider helpers для deterministic procurement и maintenance demo behavior.                   |
-| `structured_output.py` | JSON extraction и `LLMDecisionPayload` parsing из raw provider text.                                          |
-| `factory.py`           | Environment-based provider construction для supported explicit modes.                                         |
-| `gigachat.py`          | Optional/manual GigaChat configuration, transport, prompt/payload building и response parsing.                |
-| `yandex.py`            | Deferred YandexGPT settings/spike stub; active runtime integration отсутствует.                               |
-
-Provider boundary rules:
-
-* Providers только предлагают structured decisions.
-* Provider output считается недоверенным, пока он не распарсен и не провалидирован по backend contracts.
-* Runtime validation всё равно должна проверять request type, domain template и allowed tool names после schema validation.
-* Default tests и local API behavior используют deterministic mock/static providers.
-* GigaChat является optional/manual и должен быть явно настроен; failed real provider setup не должен silent fallback to mock.
-* OpenRouter и active YandexGPT runtime selection не реализованы.
-* API capabilities endpoint раскрывает model selection как disabled с active mock profile.
-
-MCP code находится в `src/enterprise_ai_tool_gateway/mcp/`.
-
-| File          | Зона ответственности                                                                                          |
-| ------------- | ------------------------------------------------------------------------------------------------------------- |
-| `boundary.py` | MCP-style client boundary, safe errors, typed demo system-status tool и result extraction/validation helpers. |
-| `server.py`   | Local demo MCP server helpers для manual smoke usage.                                                         |
-
-MCP — опциональная external tool boundary. Она не заменяет `ToolRegistry` как internal safety model.
-
-## 10. Evals and scripts
-
-Deterministic eval support находится в `src/enterprise_ai_tool_gateway/evals/` и `scripts/run_eval.py`.
-
-| Area                  | Зона ответственности                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------ |
-| `evals/cases.py`      | 21-case acceptance suite, покрывающий outcomes access, procurement и maintenance workflow.             |
-| `evals/runner.py`     | In-process FastAPI API runner, approval resolution flow, readback assertions и text result formatting. |
-| `evals/providers.py`  | Dependency override helpers для deterministic provider behavior в eval runs.                           |
-| `evals/results.py`    | Eval result models и serialization.                                                                    |
-| `scripts/run_eval.py` | CLI wrapper для deterministic acceptance suite с text и JSON output.                                   |
-
-Eval runner проверяет API surface с deterministic providers и локальными SQLite test databases. Это acceptance suite для gateway behavior, а не LLM benchmark, provider comparison harness или external-service test.
-
-Manual utility scripts:
-
-| Script                             | Назначение                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------------- |
-| `scripts/mcp_smoke.py`             | Manual local MCP boundary smoke utility.                                        |
-| `scripts/manual_gigachat_smoke.py` | Explicit/manual GigaChat smoke utility; он не должен быть частью default tests. |
-
-Local Windows demo entrypoints:
-
-| Path                             | Назначение                                                                                                                                                 |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `run_demo.cmd`                   | One-click Windows wrapper для `scripts/demo/run_demo.ps1`.                                                                                                 |
-| `scripts/demo/run_demo.ps1`      | Запускает или безопасно reuses backend/frontend, создаёт отдельный runner instance, проверяет frontend marker + proxied API health и открывает Dashboard. |
-| `scripts/demo/runner_processes.cs` | Windows Job Object ownership, atomic child creation, console cancellation and live console/file output. |
-| `scripts/demo/test_runner.ps1` | Local Windows lifecycle regression: Ctrl+C, abrupt/early termination, repeat, reuse, conflicts and partial startup. |
-| `scripts/demo/test_console_helper.cs` | Test-only hidden console, exact retained process handles and isolated Ctrl+C delivery. |
-| `scripts/demo/runner_common.ps1` | Общие helpers для immutable metadata, PID/start/command/tree ownership proof и fail-closed cleanup.                                                        |
-| `scripts/demo/stop_demo.ps1`     | Останавливает все и только verified runner-owned instance trees; legacy shared PID files и unverifiable records не являются kill authority.               |
-
-## 11. Frontend package map
-
-`frontend/` — независимый React, TypeScript и Vite client. Он не является частью Python package и не импортирует backend internals.
-
-| Path                       | Зона ответственности                                                                                                                                        |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `frontend/package.json`    | Frontend package metadata и scripts: `dev`, `typecheck`, `build`, `preview`.                                                                                |
-| `frontend/vite.config.ts`  | Vite React configuration и локальный `/api` proxy к `http://localhost:8000`.                                                                                |
-| `frontend/public/gateway-demo-marker.txt` | Project-owned static identity marker для demo runner; проверяется вместе с proxied `/api/v1/health`.                                             |
-| `frontend/src/api/`        | Все HTTP calls к backend surface `/api/v1`, frontend API types и API error handling.                                                                        |
-| `frontend/src/app/`        | App shell и React Router route definitions.                                                                                                                 |
-| `frontend/src/i18n/`       | Typed RU/EN presentation catalog, locale provider/storage и canonical-value presentation mappings.                                                          |
-| `frontend/src/pages/`      | Page-level screens для dashboard, workflow catalog, workflow submit pages, run detail, run-scoped approvals/tool calls/audit, session approvals и settings. |
-| `frontend/src/features/`   | Feature modules для workflows, approvals, runs, tool calls, audit и capabilities/API status.                                                                |
-| `frontend/src/components/` | Reusable layout, feedback, data, form и status components.                                                                                                  |
-| `frontend/src/state/`      | Browser-local known-run index и selected-run state.                                                                                                         |
-| `frontend/src/styles/`     | CSS tokens и global styles.                                                                                                                                 |
-| `frontend/src/types/`      | Shared frontend-local TypeScript types, если присутствуют.                                                                                                  |
-
-Frontend boundary rules:
-
-* `frontend/src/api/` владеет backend communication.
-* Frontend types отражают public API payloads; они не импортируют Python contracts.
-* Local known/selected-run state и locale preference являются browser-local convenience state и безопасно деградируют при storage failure. Это не backend global search и не production queue.
-* Aggregate reads не маскируют partial/unavailable state под authoritative empty, а run/approval views, drafts, controls и async feedback остаются scoped к текущему entity ID.
-* RU/EN меняет presentation only; RU является fresh-session default, а raw JSON, IDs, JSON keys, canonical enums и backend-provided text остаются canonical.
-* Frontend отображает backend-controlled outcomes; он не вызывает providers, не выполняет tools, не оценивает policy, не approves actions locally и не читает SQLite database.
-
-## 12. Карта tests
-
-`tests/` содержит deterministic Python tests. Default tests должны оставаться offline и не должны вызывать real providers или external enterprise systems.
-
-| Test area                      | Representative files                                                                                                     |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| Contracts                      | `test_contracts.py`.                                                                                                     |
-| Workflow transitions           | `test_workflow.py`.                                                                                                      |
-| Tools and registry/executor    | `test_tools.py`, `test_access_tools.py`, `test_procurement_tools.py`, `test_maintenance_tools.py`.                       |
-| Policy and approval primitives | `test_policy.py`, `test_approval.py`.                                                                                    |
-| Application runtimes           | `test_access_runtime.py`, `test_procurement_runtime.py`, `test_maintenance_runtime.py`, `test_demo_workflow_helpers.py`. |
-| API routes and public mappers  | `test_api_health_capabilities.py`, `test_api_workflows.py`, `test_api_approvals_runs.py`, `test_api_approval_concurrency.py`, `test_api_mappers.py`. |
-| Audit and redaction            | `test_audit.py`, plus API mapper/readback tests for public projection.                                                   |
-| Persistence                    | `test_db.py`.                                                                                                            |
-| Evals                          | `test_evals.py`.                                                                                                         |
-| Provider and structured output | `test_llm_spike.py`, `test_structured_output.py`, `test_gigachat_provider.py`.                                           |
-| MCP boundary                   | `test_mcp_boundary.py`, `test_mcp_spike.py`.                                                                             |
-| Import boundaries              | `test_import_boundaries.py`.                                                                                             |
-
-Frontend validation не является частью Python test suite. Frontend package валидируется npm-командами, такими как:
+## 7. Политика выполнения, согласования, инструменты и аудит
+
+Механизмы контроля разделены между специализированными пакетами.
+
+| Пакет | Зона ответственности |
+| --- | --- |
+| `policy/` | `PolicyCheckRequest`, `PolicyDecision` и `evaluate_default_tool_policy`. Стандартная политика разрешает выполнение, требует согласования или ручной проверки в зависимости от типа инструмента, риска, режима согласования и метаданных инструмента. |
+| `approval/` | `ApprovalRequirement`, `ApprovalDecision`, проверка базовых условий согласования и вспомогательные функции определения окончательного или разрешающего решения. |
+| `tools/` | `ToolRegistry`, `ToolDefinition`, `ToolExecutor`, ошибки повторной регистрации и неизвестного инструмента, проверка входных и выходных данных через Pydantic и разрешение на выполнение изменяющих состояние действий. |
+| `audit/` | `create_audit_event`, рекурсивное маскирование содержимого, выявление чувствительных ключей и значений, ограничение длины строк. |
+
+Реализованные меры контроля:
+
+* `ToolRegistry` — основной внутренний реестр и интерфейс инструментов.
+* `ToolExecutor` блокирует инструменты, которые не ограничиваются чтением, если выполнение явно не разрешено.
+* Неизвестные инструменты приводят к ошибке проверки; прикладной слой не угадывает и не исправляет их имена.
+* Стандартная политика задаёт обязательный минимум ограничений для `AUTO_APPROVE`: критический риск требует ручной проверки, изменяющие состояние вызовы с высоким риском всё равно требуют согласования, как и инструменты, для которых согласование обязательно по умолчанию.
+* Перед ответом API входные и выходные данные инструментов, а также свободные текстовые поля согласований проходят через функции маскирования.
+* Запрос решения по согласованию требует непустой `decided_by`. Условное обновление в хранилище позволяет только одному запросу перевести согласование из ожидающего состояния в окончательное; проигравший конкурентный запрос получает контролируемый `409 state_conflict` до последующих изменений окончательного состояния.
+* Содержимое события аудита рекурсивно маскируется по признакам чувствительных данных до сохранения, включая уверенно распознаваемые присваивания учётных данных в кавычках или сериализованном виде. Это не универсальная система предотвращения утечек данных (DLP).
+
+Границы ответственности:
+
+* `policy/` определяет только решения политики; не выполняет инструменты, не пишет в хранилище и не меняет состояние сценария.
+* `approval/` определяет базовые сущности согласования; прикладной слой решает, как они влияют на запуск.
+* `tools/` отвечает только за контролируемое выполнение инструментов; не управляет рассуждениями LLM, маршрутизацией HTTP или координацией сценариев.
+* `audit/` создаёт контракты событий с замаскированными данными; не отвечает за долговременное хранение или отправку во внешние системы журналирования.
+
+## 8. Хранение данных
+
+`src/enterprise_ai_tool_gateway/db/` отвечает за локальное хранение в SQLite через асинхронный SQLAlchemy.
+
+| Файл | Зона ответственности |
+| --- | --- |
+| `models.py` | Модели SQLAlchemy для запусков агента, решений LLM, вызовов инструментов, согласований и событий аудита. |
+| `repository.py` | `GatewayRepository`, методы чтения и записи, преобразование моделей в контракты. |
+| `session.py` | Вспомогательные фабрики асинхронных движков и сессий, настройка внешних ключей SQLite. |
+| `bootstrap.py` | Создание схемы для локального API и тестов. |
+| `base.py` | Декларативный базовый класс. |
+
+Сохраняются:
+
+* запуски агента;
+* проверенные решения LLM;
+* вызовы инструментов;
+* согласования;
+* события аудита.
+
+Граница ответственности: `db/` сохраняет факты, выбранные прикладным слоем. Он не определяет политику, не разрешает выполнение инструментов, не проверяет смысл ответа поставщика модели, не выбирает общий исход сценария или правила публичного представления API. `GatewayRepository` отвечает только за узкий атомарный переход согласования из ожидающего состояния в окончательное, не позволяющий двум запросам одновременно получить право завершить согласование.
+
+## 9. Интерфейсы поставщиков моделей и MCP
+
+Код поставщиков моделей находится в `src/enterprise_ai_tool_gateway/llm/`.
+
+| Файл | Зона ответственности |
+| --- | --- |
+| `base.py` | Интерфейс поставщика модели, контракты запроса и ответа решения, иерархия безопасных ошибок и защитные условия проверок реального поставщика. |
+| `mock.py` | Детерминированная заглушка поставщика для стандартных тестов и локальной демонстрации. |
+| `static.py` | Вспомогательные функции поставщика фиксированных решений для детерминированной демонстрации закупок и обслуживания. |
+| `structured_output.py` | Извлечение JSON и разбор `LLMDecisionPayload` из исходного текста ответа поставщика. |
+| `factory.py` | Создание поставщика по переменным окружения для поддерживаемых явно выбранных режимов. |
+| `gigachat.py` | Необязательная ручная интеграция GigaChat: настройки, транспорт, формирование промпта и запроса, разбор ответа. |
+| `yandex.py` | Отложенные настройки и экспериментальная заготовка YandexGPT; активной интеграции с исполнением сценариев нет. |
+
+Границы ответственности:
+
+* Поставщики моделей только предлагают структурированные решения.
+* Ответ поставщика считается недоверенным, пока не разобран и не проверен по серверным контрактам.
+* После проверки схемы прикладной слой дополнительно проверяет тип запроса, предметный шаблон и допустимые имена инструментов.
+* Стандартные тесты и локальный API используют детерминированные заглушки и фиксированные решения.
+* GigaChat подключается необязательно, вручную и с явными настройками; ошибка настройки реального поставщика не должна незаметно переключать систему на заглушку.
+* OpenRouter и выбор YandexGPT для активного исполнения не реализованы.
+* Маршрут возможностей API сообщает об отключённом выборе модели и активном профиле `mock`.
+
+Код MCP находится в `src/enterprise_ai_tool_gateway/mcp/`.
+
+| Файл | Зона ответственности |
+| --- | --- |
+| `boundary.py` | Клиентский интерфейс в стиле MCP, безопасные ошибки, типизированный демонстрационный инструмент статуса системы, извлечение и проверка результатов. |
+| `server.py` | Вспомогательные функции локального демонстрационного сервера MCP для ручной диагностики. |
+
+MCP — необязательный внешний интерфейс инструментов. Он не заменяет `ToolRegistry` как внутренний механизм контроля.
+
+## 10. Приёмочные проверки и скрипты
+
+Детерминированные приёмочные проверки находятся в `src/enterprise_ai_tool_gateway/evals/` и `scripts/run_eval.py`.
+
+| Область | Зона ответственности |
+| --- | --- |
+| `evals/cases.py` | Набор из 21 приёмочного случая для исходов сценариев доступа, закупок и обслуживания. |
+| `evals/runner.py` | Выполнение проверок через FastAPI API внутри процесса, обработка согласований, проверки чтения результатов и текстовое представление итогов. |
+| `evals/providers.py` | Подмена зависимостей для детерминированных ответов поставщиков в приёмочных проверках. |
+| `evals/results.py` | Модели результатов и сериализация. |
+| `scripts/run_eval.py` | Командная оболочка детерминированных приёмочных проверок с текстовым выводом и JSON. |
+
+Проверки обращаются к API с детерминированными поставщиками и локальными тестовыми базами SQLite. Они проверяют поведение шлюза и не являются оценкой качества LLM, сравнением поставщиков или тестированием внешних сервисов.
+
+Утилиты ручной диагностики:
+
+| Скрипт | Назначение |
+| --- | --- |
+| `scripts/mcp_smoke.py` | Ручная локальная проверка интерфейса MCP. |
+| `scripts/manual_gigachat_smoke.py` | Явно вызываемая ручная проверка GigaChat; не входит в стандартные тесты. |
+
+Точки запуска локальной демонстрации в Windows:
+
+| Путь | Назначение |
+| --- | --- |
+| `run_demo.cmd` | Запуск `scripts/demo/run_demo.ps1` одним действием в Windows. |
+| `scripts/demo/run_demo.ps1` | Запускает или безопасно использует уже работающие сервер и веб-интерфейс, создаёт отдельный экземпляр программы запуска, проверяет маркер веб-интерфейса и работоспособность API через прокси, открывает обзор. |
+| `scripts/demo/runner_processes.cs` | Владение процессами через Windows Job Object, атомарное создание дочерних процессов, отмена из консоли и вывод в консоль и файл в реальном времени. |
+| `scripts/demo/test_runner.ps1` | Локальные регрессионные проверки жизненного цикла в Windows: `Ctrl+C`, аварийное и раннее завершение, повторный запуск, использование готовых сервисов, конфликты и частичный запуск. |
+| `scripts/demo/test_console_helper.cs` | Скрытая консоль только для тестов, сохранение точных дескрипторов процессов и изолированная отправка `Ctrl+C`. |
+| `scripts/demo/runner_common.ps1` | Общие функции для неизменяемых метаданных, доказательства владения по PID, времени старта, команде и дереву процессов, а также очистки с отказом при невозможности проверки. |
+| `scripts/demo/stop_demo.ps1` | Останавливает все и только проверенные деревья процессов, принадлежащие экземплярам программы запуска; старые общие PID-файлы и непроверяемые записи не дают права завершать процессы. |
+
+## 11. Карта веб-интерфейса
+
+`frontend/` — независимый клиент на React, TypeScript и Vite. Он не входит в пакет Python и не импортирует внутренние серверные модули.
+
+| Путь | Зона ответственности |
+| --- | --- |
+| `frontend/package.json` | Метаданные пакета веб-интерфейса и команды `dev`, `typecheck`, `build`, `preview`. |
+| `frontend/vite.config.ts` | Настройки React для Vite и локальное проксирование `/api` на `http://localhost:8000`. |
+| `frontend/public/gateway-demo-marker.txt` | Статический маркер принадлежности проекту для программы запуска демонстрации; проверяется вместе с `/api/v1/health` через прокси. |
+| `frontend/src/api/` | Все HTTP-запросы к серверному `/api/v1`, типы API для веб-интерфейса и обработка ошибок API. |
+| `frontend/src/app/` | Оболочка приложения и маршруты React Router. |
+| `frontend/src/i18n/` | Типизированный словарь RU/EN, управление языком и его сохранением, отображение канонических значений. |
+| `frontend/src/pages/` | Экраны обзора, каталога и отправки заявок, сведений о запуске, его согласований, вызовов инструментов и аудита, а также согласований текущей сессии и настроек. |
+| `frontend/src/features/` | Модули сценариев, согласований, запусков, вызовов инструментов, аудита, возможностей и состояния API. |
+| `frontend/src/components/` | Общие компоненты разметки, обратной связи, данных, форм и статусов. |
+| `frontend/src/state/` | Индекс известных запусков и выбранный запуск, хранящиеся в браузере. |
+| `frontend/src/styles/` | Токены CSS и общие стили. |
+| `frontend/src/types/` | Общие локальные типы TypeScript веб-интерфейса, если присутствуют. |
+
+Границы ответственности:
+
+* `frontend/src/api/` отвечает за обмен данными с сервером.
+* Типы веб-интерфейса отражают публичные данные API и не импортируют контракты Python.
+* Известный и выбранный запуск, а также выбранный язык — вспомогательное состояние браузера. Ошибка хранилища не должна ломать приложение. Это не глобальный поиск на сервере и не производственная очередь.
+* Сводное чтение не выдаёт частично доступные или недоступные данные за достоверный пустой результат. Данные запусков и согласований, черновики, элементы управления и асинхронные сообщения относятся только к текущему идентификатору сущности.
+* RU/EN меняет только представление. При отсутствии сохранённого языка выбран RU; исходный JSON, идентификаторы, ключи JSON, канонические перечисления и текст сервера не переводятся.
+* Веб-интерфейс отображает исходы, определённые сервером. Он не вызывает поставщиков моделей, не выполняет инструменты, не оценивает политику, не согласовывает действия локально и не читает базу SQLite.
+
+## 12. Карта тестов
+
+`tests/` содержит детерминированные тесты Python. Стандартные тесты выполняются автономно, без вызовов реальных поставщиков моделей и внешних корпоративных систем.
+
+| Область тестирования | Основные файлы |
+| --- | --- |
+| Контракты | `test_contracts.py`. |
+| Переходы состояния сценария | `test_workflow.py`. |
+| Инструменты, реестр и исполнитель | `test_tools.py`, `test_access_tools.py`, `test_procurement_tools.py`, `test_maintenance_tools.py`. |
+| Базовые сущности политики и согласования | `test_policy.py`, `test_approval.py`. |
+| Исполнение сценариев в прикладном слое | `test_access_runtime.py`, `test_procurement_runtime.py`, `test_maintenance_runtime.py`, `test_demo_workflow_helpers.py`. |
+| Маршруты API и публичные преобразования | `test_api_health_capabilities.py`, `test_api_workflows.py`, `test_api_approvals_runs.py`, `test_api_approval_concurrency.py`, `test_api_mappers.py`. |
+| Аудит и маскирование | `test_audit.py`, а также тесты преобразований API и чтения публичных представлений. |
+| Хранение данных | `test_db.py`. |
+| Приёмочные проверки | `test_evals.py`. |
+| Поставщики моделей и структурированный ответ | `test_llm_spike.py`, `test_structured_output.py`, `test_gigachat_provider.py`. |
+| Интерфейс MCP | `test_mcp_boundary.py`, `test_mcp_spike.py`. |
+| Границы импортов | `test_import_boundaries.py`. |
+
+Проверки веб-интерфейса не входят в набор тестов Python. Его пакет проверяется командами npm:
 
 ```bash
 cd frontend
@@ -352,77 +352,77 @@ npm run build
 
 ## 13. Карта документации
 
-Source-of-truth documentation в `docs/` и корне репозитория:
+Основная документация с устойчивыми сведениями о проекте находится в `docs/` и корне репозитория:
 
-| Document                    | Status        | Зона ответственности                                                                    |
-| --------------------------- | ------------- | --------------------------------------------------------------------------------------- |
-| `README.md`                 | written       | Public quickstart, local API/frontend commands и validation commands.                   |
-| `docs/PROJECT_CONTEXT.md`   | written       | Current prototype scope, implemented workflows, safety status и intentional non-goals.  |
-| `docs/ARCHITECTURE.md`      | written       | System architecture, lifecycle, boundaries, failure model и limitations.                |
-| `docs/PROJECT_MAP.md`       | this document | Concrete repository structure, package ownership, entrypoints и boundary rules.         |
-| `docs/API_AND_EVALS.md`     | written       | Public API surface, controlled outcomes, redaction behavior и deterministic eval suite. |
-| `docs/DEMO_WALKTHROUGH.md`  | written       | Local demo flow walkthroughs для backend, frontend и eval runner.                       |
-| `docs/DEVELOPMENT_GUIDE.md` | written       | Setup, validation, smoke checks и safe development workflow.                            |
+| Документ | Состояние | Зона ответственности |
+| --- | --- | --- |
+| `README.md` | написан | Публичное краткое руководство, локальный запуск API и веб-интерфейса, команды проверки. |
+| `docs/PROJECT_CONTEXT.md` | написан | Границы прототипа, реализованные сценарии, меры контроля и сознательно исключённые возможности. |
+| `docs/ARCHITECTURE.md` | написан | Архитектура системы, жизненный цикл, границы ответственности, модель ошибок и ограничения. |
+| `docs/PROJECT_MAP.md` | этот документ | Структура репозитория, ответственность пакетов, точки входа и правила разделения слоёв. |
+| `docs/API_AND_EVALS.md` | написан | Публичный API, контролируемые исходы, маскирование данных и детерминированные приёмочные проверки. |
+| `docs/DEMO_WALKTHROUGH.md` | написан | Пошаговая локальная демонстрация серверной части, веб-интерфейса и приёмочных проверок. |
+| `docs/DEVELOPMENT_GUIDE.md` | написан | Подготовка окружения, проверки, ручная диагностика и безопасный порядок разработки. |
 
-Дополнительные существующие support docs:
+Дополнительные документы:
 
-| Document                        | Зона ответственности                                           |
-| ------------------------------- | -------------------------------------------------------------- |
-| `docs/LLM_PROVIDER_POLICY.md`   | Provider/model/tool-calling policy и real-provider guardrails. |
-| `docs/DEVELOPMENT_CHECKLIST.md` | Current development и validation checklist.                    |
+| Документ | Зона ответственности |
+| --- | --- |
+| `docs/LLM_PROVIDER_POLICY.md` | Политика поставщиков моделей и вызова инструментов, защитные ограничения для реальных поставщиков. |
+| `docs/DEVELOPMENT_CHECKLIST.md` | Текущий чеклист разработки и проверок. |
 
-Documentation boundary rules:
+Границы документации:
 
-* Public docs должны точно описывать реализованный local/demo prototype.
-* Сохранённые local task, report, plan и diff artifacts в ignored working directories не являются public source-of-truth docs.
-* Documentation не должна заявлять production readiness, реальные enterprise integrations, auth/RBAC/tenants, provider/model selection, deployment readiness, workflow builder или policy editor support, если эти функции фактически не реализованы и не approved.
+* Публичные документы точно описывают реализованный локальный демонстрационный прототип.
+* Локальные задания, отчёты, планы и файлы различий в игнорируемых рабочих каталогах не являются основными публичными документами проекта.
+* Документация не должна заявлять готовность к промышленной эксплуатации и развёртыванию, реальные корпоративные интеграции, аутентификацию, RBAC, арендаторов, выбор поставщика или модели, конструктор сценариев или редактор политик, если они фактически не реализованы и не согласованы.
 
-## 14. Import and boundary rules
+## 14. Правила импортов и разделения ответственности
 
-Core boundary rules:
+Основные правила:
 
-* Frontend code не должен импортировать backend Python internals.
-* API routes должны оставаться thin inbound adapters поверх `/api/v1`.
-* Application runtimes владеют orchestration и workflow decisions.
-* Contracts не должны зависеть от application runtimes, API routes, provider implementations или persistence.
-* Database/repository layer не должен владеть workflow decisions, policy decisions или tool authorization.
-* Tools выполняются только через `ToolRegistry` / `ToolExecutor` или явно ограниченную MCP/MCP-like boundary.
-* Provider output должен быть распарсен и провалидирован до использования runtime.
-* Runtime validation должна отклонять mismatched request types, mismatched domain templates и unknown или disallowed tool proposals.
-* State-changing tools требуют policy checks.
-* Risky или default-approval state-changing tools требуют approval перед draft execution.
-* Public API responses должны использовать safe projection/redaction для tool payloads и approval free-text fields.
-* MCP является optional и не должна заменять `ToolRegistry` как canonical internal tool boundary.
-* Real provider smoke должен оставаться explicit/manual/configured и вне default pytest.
+* Веб-интерфейс не импортирует внутренние модули серверной части Python.
+* Маршруты API остаются тонкими входными адаптерами `/api/v1`.
+* Прикладной слой координирует исполнение и принимает решения по сценарию.
+* Контракты не зависят от прикладного слоя, маршрутов API, реализаций поставщиков моделей или хранилища.
+* База данных и репозиторий не принимают решений по сценарию или политике и не разрешают выполнение инструментов.
+* Инструменты выполняются только через `ToolRegistry` / `ToolExecutor` или явно ограниченный интерфейс MCP либо аналогичный ему.
+* Ответ поставщика модели разбирается и проверяется до использования прикладным слоем.
+* Проверка в прикладном слое отклоняет несовпадающие типы запросов и предметные шаблоны, а также неизвестные или недопустимые предложения инструментов.
+* Изменяющие состояние инструменты требуют проверки политики.
+* Изменяющие состояние инструменты с риском или обязательным согласованием по умолчанию требуют согласования перед созданием черновика.
+* Публичные ответы API используют безопасные проекции и маскирование данных инструментов и свободных текстовых полей согласований.
+* MCP необязателен и не заменяет `ToolRegistry` как основной внутренний механизм контроля инструментов.
+* Проверки реальных поставщиков моделей остаются явно вызываемыми, ручными, требуют настройки и не входят в стандартный запуск pytest.
 
-Practical dependency direction:
+Практическое направление использования слоёв:
 
 ```text
 contracts
   -> workflow / tools / policy / approval / audit / db
-  -> domain workflow packages
-  -> application runtimes
+  -> пакеты предметных сценариев
+  -> application (исполнение сценариев)
   -> api/http
-  -> frontend over HTTP only
+  -> frontend (только через HTTP)
 ```
 
-Стрелки описывают разрешённое направление consumption. Они не означают, что lower layers могут вызывать upward в API, frontend или application runtime code.
+Стрелки показывают порядок использования нижних слоёв верхними. Они не разрешают нижним слоям вызывать код API, веб-интерфейса или прикладного слоя.
 
-## 15. Ignored / temporary / generated artifacts
+## 15. Игнорируемые, временные и сгенерированные файлы
 
-Ignored и local-only artifacts включают:
+Локальные и игнорируемые файлы:
 
-| Artifact                                                                | Handling                                                                                                      |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `frontend/node_modules/`                                                | Ignored dependency install output.                                                                            |
-| `frontend/dist/`                                                        | Ignored Vite build output.                                                                                    |
-| `frontend/.vite/`                                                       | Ignored Vite cache.                                                                                           |
-| `.venv/`, `.pytest_cache/`, `.ruff_cache/`, `.pyright/`, `__pycache__/` | Ignored local Python/tool caches.                                                                             |
-| `.runtime/instances/<instance-id>/`                                    | Per-runner instance metadata; service records существуют только для processes, запущенных этим instance.      |
-| `.runtime/logs/<instance-id>/`                                         | Per-instance backend/frontend logs; могут оставаться после cleanup для диагностики.                           |
-| `/data/`, `*.db`, `*.sqlite`, `*.sqlite3`, `*.log`                      | Ignored local runtime data и logs.                                                                            |
-| `.env`, `.env.*` except `.env.example`                                  | Ignored local environment и secret files.                                                                     |
-| `*.diff`, `*.patch`                                                     | Ignored local review/diff artifacts.                                                                          |
-| local task/report/plan artifacts under ignored working directories      | Temporary working artifacts, если присутствуют локально; они не должны считаться public source-of-truth docs. |
+| Файл или каталог | Обращение с ним |
+| --- | --- |
+| `frontend/node_modules/` | Игнорируемый результат установки зависимостей. |
+| `frontend/dist/` | Игнорируемый результат сборки Vite. |
+| `frontend/.vite/` | Игнорируемый кэш Vite. |
+| `.venv/`, `.pytest_cache/`, `.ruff_cache/`, `.pyright/`, `__pycache__/` | Игнорируемые локальные кэши Python и инструментов. |
+| `.runtime/instances/<instance-id>/` | Метаданные отдельного экземпляра программы запуска; записи сервисов создаются только для запущенных им процессов. |
+| `.runtime/logs/<instance-id>/` | Журналы сервера и веб-интерфейса отдельного экземпляра; могут оставаться после очистки для диагностики. |
+| `/data/`, `*.db`, `*.sqlite`, `*.sqlite3`, `*.log` | Игнорируемые локальные данные и журналы приложения. |
+| `.env`, `.env.*` кроме `.env.example` | Игнорируемые локальные настройки окружения и файлы с секретами. |
+| `*.diff`, `*.patch` | Игнорируемые локальные файлы различий и материалы проверки. |
+| локальные задания, отчёты и планы в игнорируемых рабочих каталогах | Временные рабочие материалы; не считаются основными публичными документами проекта. |
 
-Не коммить secrets, credentials, local database files, generated dependency folders, build outputs или temporary task/report/diff artifacts.
+Не коммитьте секреты, учётные данные, локальные базы данных, каталоги установленных зависимостей, результаты сборки или временные задания, отчёты и файлы различий.
