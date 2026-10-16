@@ -6,6 +6,26 @@ Enterprise AI Tool Gateway — это локальный/demo-прототип �
 
 Это не chatbot, не автономное прямое использование tools со стороны LLM и не production SaaS platform.
 
+## Демонстрация
+
+Видео работы расширения и примеры его интерфейса.
+
+[Смотреть видео](https://github.com/user-attachments/assets/d8f6e8f7-d521-42de-986b-02f59fa2bdbc)
+
+### Images
+
+<img width="3831" height="2048" alt="Dashboard" src="https://github.com/user-attachments/assets/780fb52a-6d07-410c-9b6a-e8f4d09686ec" />
+
+<img width="3831" height="2051" alt="Run Detail" src="https://github.com/user-attachments/assets/b107e7a7-ffbc-4e26-95fb-d444b85a62a2" />
+
+<img width="3832" height="2038" alt="Settings" src="https://github.com/user-attachments/assets/0e1da123-e549-4bb9-b8e6-8cfcc24c2375" />
+
+<img width="3836" height="2047" alt="Workflow submit" src="https://github.com/user-attachments/assets/bab384b7-f723-4c09-b19c-45efa40d5c54" />
+
+<img width="3835" height="2046" alt="Manual review" src="[https://github.com/user-attachments/assets/2349e6b5-0ac2-40c7-9b06-1e4f6912b244](https://github.com/user-attachments/assets/2349e6b5-0ac2-40c7-9b06-1e4f6912b244)" />
+
+
+
 ## 2. Что это демонстрирует
 
 * Controlled gateway lifecycle от workflow submission до final run status.
